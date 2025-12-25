@@ -1,0 +1,337 @@
+'use server'
+
+import { createClient } from '@/lib/supabase/server'
+
+export interface DashboardStatsData {
+  totalRequests: number
+  pendingRequests: number
+  completedRequests: number
+  avgCompletionDays: number
+  requestsChange: number
+  completionRate: number
+}
+
+export async function getDashboardStats(): Promise<{ stats?: DashboardStatsData; error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: '로그인이 필요합니다.' }
+  }
+
+  // 전체 요청 수
+  const { count: totalRequests } = await supabase
+    .from('service_requests')
+    .select('*', { count: 'exact', head: true })
+
+  // 대기 중인 요청 (requested, reviewing)
+  const { count: pendingRequests } = await supabase
+    .from('service_requests')
+    .select('*', { count: 'exact', head: true })
+    .in('status', ['requested', 'reviewing'])
+
+  // 완료된 요청
+  const { count: completedRequests } = await supabase
+    .from('service_requests')
+    .select('*', { count: 'exact', head: true })
+    .eq('status', 'completed')
+
+  // 완료된 요청의 평균 처리 일수
+  const { data: completedData } = await supabase
+    .from('service_requests')
+    .select('created_at, completed_at')
+    .eq('status', 'completed')
+    .not('completed_at', 'is', null)
+
+  let avgCompletionDays = 0
+  if (completedData && completedData.length > 0) {
+    const totalDays = completedData.reduce((sum, req) => {
+      const created = new Date(req.created_at)
+      const completed = new Date(req.completed_at!)
+      const days = Math.ceil((completed.getTime() - created.getTime()) / (1000 * 60 * 60 * 24))
+      return sum + days
+    }, 0)
+    avgCompletionDays = Math.round(totalDays / completedData.length)
+  }
+
+  // 이번 주 요청 수 vs 지난 주 요청 수
+  const now = new Date()
+  const thisWeekStart = new Date(now)
+  thisWeekStart.setDate(now.getDate() - 7)
+  const lastWeekStart = new Date(thisWeekStart)
+  lastWeekStart.setDate(thisWeekStart.getDate() - 7)
+
+  const { count: thisWeekCount } = await supabase
+    .from('service_requests')
+    .select('*', { count: 'exact', head: true })
+    .gte('created_at', thisWeekStart.toISOString())
+
+  const { count: lastWeekCount } = await supabase
+    .from('service_requests')
+    .select('*', { count: 'exact', head: true })
+    .gte('created_at', lastWeekStart.toISOString())
+    .lt('created_at', thisWeekStart.toISOString())
+
+  const requestsChange = lastWeekCount 
+    ? Math.round(((thisWeekCount || 0) - lastWeekCount) / lastWeekCount * 100)
+    : 0
+
+  // 완료율
+  const completionRate = totalRequests 
+    ? Math.round((completedRequests || 0) / totalRequests * 100)
+    : 0
+
+  return {
+    stats: {
+      totalRequests: totalRequests || 0,
+      pendingRequests: pendingRequests || 0,
+      completedRequests: completedRequests || 0,
+      avgCompletionDays,
+      requestsChange,
+      completionRate
+    }
+  }
+}
+
+export interface RequestsTrendData {
+  date: string
+  requests: number
+  completed: number
+}
+
+export async function getRequestsTrend(): Promise<{ data?: RequestsTrendData[]; error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: '로그인이 필요합니다.' }
+  }
+
+  // 최근 30일 데이터
+  const days = 30
+  const startDate = new Date()
+  startDate.setDate(startDate.getDate() - days)
+
+  const { data: requests } = await supabase
+    .from('service_requests')
+    .select('created_at, status, completed_at')
+    .gte('created_at', startDate.toISOString())
+
+  // 일별로 그룹핑
+  const trendMap = new Map<string, { requests: number; completed: number }>()
+  
+  for (let i = 0; i < days; i++) {
+    const date = new Date()
+    date.setDate(date.getDate() - (days - 1 - i))
+    const dateStr = date.toISOString().split('T')[0]
+    trendMap.set(dateStr, { requests: 0, completed: 0 })
+  }
+
+  requests?.forEach(req => {
+    const createdDate = req.created_at.split('T')[0]
+    if (trendMap.has(createdDate)) {
+      const current = trendMap.get(createdDate)!
+      trendMap.set(createdDate, { ...current, requests: current.requests + 1 })
+    }
+
+    if (req.completed_at) {
+      const completedDate = req.completed_at.split('T')[0]
+      if (trendMap.has(completedDate)) {
+        const current = trendMap.get(completedDate)!
+        trendMap.set(completedDate, { ...current, completed: current.completed + 1 })
+      }
+    }
+  })
+
+  const trendData: RequestsTrendData[] = []
+  trendMap.forEach((value, key) => {
+    trendData.push({
+      date: key,
+      requests: value.requests,
+      completed: value.completed
+    })
+  })
+
+  return { data: trendData }
+}
+
+export interface StatusData {
+  status: string
+  count: number
+  label: string
+}
+
+export async function getStatusDistribution(): Promise<{ data?: StatusData[]; error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: '로그인이 필요합니다.' }
+  }
+
+  const statusLabels: Record<string, string> = {
+    requested: '접수 대기',
+    reviewing: '검토 중',
+    processing: '처리 중',
+    completed: '완료',
+    rejected: '반려'
+  }
+
+  const statuses = Object.keys(statusLabels)
+  const result: StatusData[] = []
+
+  for (const status of statuses) {
+    const { count } = await supabase
+      .from('service_requests')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', status)
+
+    result.push({
+      status,
+      count: count || 0,
+      label: statusLabels[status]
+    })
+  }
+
+  return { data: result }
+}
+
+export interface RecentRequestData {
+  id: string
+  title: string
+  status: string
+  priority: string
+  requester_name: string
+  created_at: string
+}
+
+export async function getRecentRequests(): Promise<{ data?: RecentRequestData[]; error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: '로그인이 필요합니다.' }
+  }
+
+  const { data: requests, error } = await supabase
+    .from('service_requests')
+    .select(`
+      id,
+      title,
+      status,
+      priority,
+      created_at,
+      requester:profiles!service_requests_requester_id_fkey(full_name)
+    `)
+    .order('created_at', { ascending: false })
+    .limit(10)
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  const result: RecentRequestData[] = requests.map(req => {
+    const requester = req.requester as unknown as { full_name: string | null } | null
+    return {
+      id: req.id,
+      title: req.title,
+      status: req.status,
+      priority: req.priority,
+      requester_name: requester?.full_name || '알 수 없음',
+      created_at: req.created_at
+    }
+  })
+
+  return { data: result }
+}
+
+export interface SystemStatsData {
+  system_id: string
+  system_name: string
+  total: number
+  pending: number
+  completed: number
+}
+
+export async function getSystemStats(): Promise<{ data?: SystemStatsData[]; error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: '로그인이 필요합니다.' }
+  }
+
+  // 시스템별 요청 현황
+  const { data: systems } = await supabase
+    .from('systems')
+    .select('id, name')
+
+  if (!systems) {
+    return { data: [] }
+  }
+
+  const result: SystemStatsData[] = []
+
+  for (const system of systems) {
+    const { count: total } = await supabase
+      .from('service_requests')
+      .select('*', { count: 'exact', head: true })
+      .eq('system_id', system.id)
+
+    const { count: pending } = await supabase
+      .from('service_requests')
+      .select('*', { count: 'exact', head: true })
+      .eq('system_id', system.id)
+      .in('status', ['requested', 'reviewing', 'processing'])
+
+    const { count: completed } = await supabase
+      .from('service_requests')
+      .select('*', { count: 'exact', head: true })
+      .eq('system_id', system.id)
+      .eq('status', 'completed')
+
+    if (total && total > 0) {
+      result.push({
+        system_id: system.id,
+        system_name: system.name,
+        total: total || 0,
+        pending: pending || 0,
+        completed: completed || 0
+      })
+    }
+  }
+
+  // 시스템 미지정 요청
+  const { count: noSystemTotal } = await supabase
+    .from('service_requests')
+    .select('*', { count: 'exact', head: true })
+    .is('system_id', null)
+
+  if (noSystemTotal && noSystemTotal > 0) {
+    const { count: noSystemPending } = await supabase
+      .from('service_requests')
+      .select('*', { count: 'exact', head: true })
+      .is('system_id', null)
+      .in('status', ['requested', 'reviewing', 'processing'])
+
+    const { count: noSystemCompleted } = await supabase
+      .from('service_requests')
+      .select('*', { count: 'exact', head: true })
+      .is('system_id', null)
+      .eq('status', 'completed')
+
+    result.push({
+      system_id: 'none',
+      system_name: '미지정',
+      total: noSystemTotal || 0,
+      pending: noSystemPending || 0,
+      completed: noSystemCompleted || 0
+    })
+  }
+
+  // 총 요청 수 기준 정렬
+  result.sort((a, b) => b.total - a.total)
+
+  return { data: result.slice(0, 5) }
+}
+
