@@ -37,7 +37,7 @@ export async function Header() {
             height={32}
             className="object-contain"
           />
-          <span className="hidden sm:inline text-[15px]">Estate IT</span>
+          <span className="hidden sm:inline text-[15px]">estate IT</span>
         </Link>
 
         {/* Navigation */}
