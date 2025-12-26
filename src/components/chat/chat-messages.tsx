@@ -5,6 +5,8 @@ import { cn } from '@/lib/utils'
 import { Bot, User, FileText, Download, Image as ImageIcon, ExternalLink } from 'lucide-react'
 import { RequirementCard } from './requirement-card'
 import type { AttachmentData } from '@/app/chat/attachments'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 export interface Message {
   id: string
@@ -80,7 +82,14 @@ export function ChatMessages({ messages, isLoading, onRequirementUpdate }: ChatM
                     : 'bg-white text-gray-800 border border-gray-200 shadow-sm'
                 )}
               >
-                <p className="whitespace-pre-wrap">{message.content}</p>
+                <div className={cn(
+                  'markdown-content',
+                  message.role === 'user' ? 'markdown-user' : 'markdown-assistant'
+                )}>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {message.content}
+                  </ReactMarkdown>
+                </div>
                 
                 {/* 첨부파일 표시 */}
                 {message.metadata?.attachments && message.metadata.attachments.length > 0 && (

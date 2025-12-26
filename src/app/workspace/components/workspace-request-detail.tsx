@@ -123,16 +123,18 @@ export function WorkspaceRequestDetail({ request, currentUserId }: WorkspaceRequ
   const statusConfig = STATUS_CONFIG[request.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.requested
   const createdDate = new Date(request.created_at)
 
-  // 기존 대화 로드 또는 리셋
+  // 담당자 전용 대화 로드 (type: 'manager'인 것만)
   useEffect(() => {
     const loadConversation = async () => {
       const supabase = createClient()
       
-      // 해당 요청에 연결된 대화 조회
+      // 해당 요청에 연결된 담당자 내부 대화만 조회 (type: 'manager')
+      // 요청자의 원본 AI 채팅(type: 'requester')은 조회하지 않음
       const { data: conv } = await supabase
         .from('conversations')
         .select('id, messages(*)')
         .eq('request_id', request.id)
+        .eq('type', 'manager')  // 담당자 내부 채팅만
         .order('created_at', { ascending: true, referencedTable: 'messages' })
         .single()
 
@@ -186,9 +188,13 @@ export function WorkspaceRequestDetail({ request, currentUserId }: WorkspaceRequ
     try {
       let activeConversationId = conversationId
       
-      // 대화가 없으면 새로 생성
+      // 대화가 없으면 담당자 전용 내부 대화로 새로 생성 (type: 'manager')
       if (!activeConversationId) {
-        const result = await createConversation(`[처리] ${request.title}`, request.id)
+        const result = await createConversation(
+          `[내부처리] ${request.title}`, 
+          request.id, 
+          'manager'  // 담당자 내부 채팅으로 생성
+        )
         if (result.error || !result.conversation) {
           throw new Error(result.error || '대화 생성 실패')
         }
@@ -415,14 +421,19 @@ export function WorkspaceRequestDetail({ request, currentUserId }: WorkspaceRequ
       <div className="flex-1 flex flex-col overflow-hidden bg-gray-50">
         {/* Chat Header */}
         <div className="flex-shrink-0 px-4 py-3 bg-white border-b border-gray-200">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-sm">
-              <Bot className="size-4 text-white" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-sm">
+                <Bot className="size-4 text-white" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">AI 협업 어시스턴트</h3>
+                <p className="text-xs text-gray-500">요청 처리를 함께 도와드립니다</p>
+              </div>
             </div>
-            <div>
-              <h3 className="font-semibold text-gray-900">AI 협업 어시스턴트</h3>
-              <p className="text-xs text-gray-500">요청 처리를 함께 도와드립니다</p>
-            </div>
+            <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-xs">
+              🔒 내부 전용
+            </Badge>
           </div>
         </div>
 

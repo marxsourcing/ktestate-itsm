@@ -3,7 +3,11 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
-export async function createConversation(title?: string, requestId?: string) {
+export async function createConversation(
+  title?: string, 
+  requestId?: string, 
+  type: 'requester' | 'manager' = 'requester'
+) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -17,6 +21,7 @@ export async function createConversation(title?: string, requestId?: string) {
       user_id: user.id,
       title: title || '새 대화',
       request_id: requestId || null,
+      type,
     })
     .select()
     .single()
@@ -28,6 +33,7 @@ export async function createConversation(title?: string, requestId?: string) {
   revalidatePath('/chat')
   if (requestId) {
     revalidatePath(`/requests/${requestId}`)
+    revalidatePath('/workspace')
   }
   return { id: data.id, conversation: data }
 }

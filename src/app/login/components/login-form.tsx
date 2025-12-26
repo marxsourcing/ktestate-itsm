@@ -1,16 +1,19 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { login, signup } from '../actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
 
 export function LoginForm() {
   const [isPending, setIsPending] = useState(false)
   const [isSignup, setIsSignup] = useState(false)
+  const router = useRouter()
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -30,6 +33,8 @@ export function LoginForm() {
       const result = await login(formData)
       if (result?.error) {
         toast.error(result.error)
+      } else if (result?.success) {
+        router.push('/')
       }
     }
     
@@ -51,16 +56,31 @@ export function LoginForm() {
 
       <form onSubmit={handleSubmit} className="space-y-5">
         {isSignup && (
-          <div className="space-y-2">
-            <Label htmlFor="full_name" className="text-gray-700">이름</Label>
-            <Input 
-              id="full_name" 
-              name="full_name" 
-              placeholder="홍길동" 
-              required 
-              className="h-11 bg-white border-gray-300 text-gray-900 placeholder:text-gray-400 focus:border-rose-500 focus:ring-rose-100"
-            />
-          </div>
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="full_name" className="text-gray-700">이름</Label>
+              <Input 
+                id="full_name" 
+                name="full_name" 
+                placeholder="홍길동" 
+                required 
+                className="h-11 bg-white border-gray-300 text-gray-900 placeholder:text-gray-400 focus:border-rose-500 focus:ring-rose-100"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="role" className="text-gray-700">역할</Label>
+              <Select name="role" defaultValue="requester">
+                <SelectTrigger className="h-11 bg-white border-gray-300 text-gray-900 focus:border-rose-500 focus:ring-rose-100">
+                  <SelectValue placeholder="역할을 선택하세요" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="requester">요청자 (IT 서비스 요청)</SelectItem>
+                  <SelectItem value="manager">담당자 (요청 처리)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-gray-400">요청자: IT 서비스를 요청하는 일반 사용자 / 담당자: 요청을 처리하는 IT 담당자</p>
+            </div>
+          </>
         )}
         <div className="space-y-2">
           <Label htmlFor="email" className="text-gray-700">이메일</Label>

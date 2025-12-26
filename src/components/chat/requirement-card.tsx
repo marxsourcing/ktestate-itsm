@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { ClipboardList, ChevronDown, Pencil, Check } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 interface RequirementData {
   system?: string
@@ -177,7 +179,11 @@ export function RequirementCard({ data, onUpdate, readOnly = false }: Requiremen
               {data.description && (
                 <div className="space-y-1">
                   <span className="text-xs text-gray-500">상세 내용</span>
-                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{data.description}</p>
+                  <div className="text-sm text-gray-700 markdown-content markdown-assistant">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {data.description}
+                    </ReactMarkdown>
+                  </div>
                 </div>
               )}
 

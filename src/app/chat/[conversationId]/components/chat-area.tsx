@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { ChatMessages, Message, RequirementData } from '@/components/chat/chat-messages'
 import { ChatInput } from '@/components/chat/chat-input'
@@ -18,16 +18,8 @@ export function ChatArea({ conversationId, initialMessages, conversationStatus }
   const searchParams = useSearchParams()
   const [messages, setMessages] = useState<Message[]>(initialMessages)
   const [isLoading, setIsLoading] = useState(false)
-  const [initialMessageSent, setInitialMessageSent] = useState(false)
-
-  // URL에서 초기 메시지 확인 및 전송
-  useEffect(() => {
-    const initialMessage = searchParams.get('message')
-    if (initialMessage && !initialMessageSent && messages.length === 0) {
-      setInitialMessageSent(true)
-      sendMessage(initialMessage)
-    }
-  }, [searchParams, initialMessageSent, messages.length])
+  const initialMessageSentRef = useRef(false)
+  const sendMessageRef = useRef<((content: string, attachments?: AttachmentData[]) => Promise<void>) | null>(null)
 
   // 실시간 메시지 구독
   useEffect(() => {
@@ -58,6 +50,15 @@ export function ChatArea({ conversationId, initialMessages, conversationStatus }
       supabase.removeChannel(channel)
     }
   }, [conversationId])
+
+  // URL에서 초기 메시지 확인 및 전송
+  useEffect(() => {
+    const initialMessage = searchParams.get('message')
+    if (initialMessage && !initialMessageSentRef.current && messages.length === 0 && sendMessageRef.current) {
+      initialMessageSentRef.current = true
+      sendMessageRef.current(initialMessage)
+    }
+  }, [searchParams, messages.length])
 
   const sendMessage = useCallback(async (content: string, attachments?: AttachmentData[]) => {
     if (conversationStatus === 'confirmed') return
@@ -188,6 +189,11 @@ export function ChatArea({ conversationId, initialMessages, conversationStatus }
       setIsLoading(false)
     }
   }, [conversationId, messages, conversationStatus])
+
+  // sendMessage ref 업데이트
+  useEffect(() => {
+    sendMessageRef.current = sendMessage
+  }, [sendMessage])
 
   const handleRequirementUpdate = useCallback((data: RequirementData) => {
     setMessages((prev) => {
