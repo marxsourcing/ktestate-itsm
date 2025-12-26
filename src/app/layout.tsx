@@ -18,6 +18,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "KT Estate IT 서비스 - AI 기반 요구사항 관리",
   description: "AI가 도와주는 IT 서비스 요청 및 관리 시스템",
+  icons: {
+    icon: "/img/kt_logo.png",
+    shortcut: "/img/kt_logo.png",
+    apple: "/img/kt_logo.png",
+  },
 };
 
 export default function RootLayout({

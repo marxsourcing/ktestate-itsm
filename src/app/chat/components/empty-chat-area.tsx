@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useTransition } from 'react'
+import Image from 'next/image'
 import { ChatInput } from '@/components/chat/chat-input'
 import { createConversation } from '@/app/chat/actions'
 
@@ -25,9 +26,15 @@ export function EmptyChatArea() {
       {/* Empty state - centered */}
       <div className="flex flex-1 flex-col items-center justify-center px-4">
         <div className="max-w-md text-center">
-          {/* KT Style Logo */}
-          <div className="mb-6 inline-flex size-16 items-center justify-center rounded-2xl kt-gradient shadow-lg kt-shadow">
-            <span className="text-xl font-bold text-white">KT</span>
+          {/* KT Logo */}
+          <div className="mb-6 flex justify-center">
+            <Image 
+              src="/img/kt_logo.png" 
+              alt="KT Logo" 
+              width={64} 
+              height={64}
+              className="object-contain"
+            />
           </div>
           <h2 className="mb-3 text-2xl font-semibold text-gray-900">
             무엇을 도와드릴까요?

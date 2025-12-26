@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 
 const SYSTEM_PROMPT = `당신은 KT Estate의 IT 서비스 요구사항 접수를 도와주는 AI 어시스턴트입니다.
 
@@ -48,9 +49,9 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    const openaiApiKey = process.env.OPENAI_API_KEY
+    const geminiApiKey = process.env.GEMINI_API_KEY
 
-    if (!openaiApiKey) {
+    if (!geminiApiKey) {
       // API 키가 없으면 더미 스트리밍 응답
       return createDummyStreamResponse(message, messages)
     }
@@ -64,86 +65,50 @@ export async function POST(request: NextRequest) {
       userMessage = `${fileInfo}\n\n${message}`
     }
 
-    // OpenAI API 호출 (스트리밍)
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${openaiApiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        stream: true,
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          ...messages.slice(-10).map((m: { role: string; content: string }) => ({
-            role: m.role,
-            content: m.content,
-          })),
-          { role: 'user', content: userMessage }
-        ],
-        temperature: 0.7,
-        max_tokens: 1000,
-      }),
+    // Gemini API 호출 (스트리밍)
+    const genAI = new GoogleGenerativeAI(geminiApiKey)
+    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' })
+
+    // 대화 기록을 Gemini 형식으로 변환
+    const chatHistory = messages.slice(-10).map((m: { role: string; content: string }) => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }],
+    }))
+
+    const chat = model.startChat({
+      history: chatHistory,
+      systemInstruction: SYSTEM_PROMPT,
     })
 
-    if (!response.ok) {
-      console.error('OpenAI API error:', await response.text())
-      return createDummyStreamResponse(message, messages)
-    }
+    const result = await chat.sendMessageStream(userMessage)
 
     // 스트림 변환
     const encoder = new TextEncoder()
-    const decoder = new TextDecoder()
 
     const stream = new ReadableStream({
       async start(controller) {
-        const reader = response.body?.getReader()
-        if (!reader) {
-          controller.close()
-          return
-        }
-
-        let buffer = ''
         let fullContent = ''
 
         try {
-          while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
-
-            buffer += decoder.decode(value, { stream: true })
-            const lines = buffer.split('\n')
-            buffer = lines.pop() || ''
-
-            for (const line of lines) {
-              if (line.startsWith('data: ')) {
-                const data = line.slice(6)
-                if (data === '[DONE]') {
-                  // 요구사항 카드 파싱
-                  const metadata = parseRequirementCard(fullContent)
-                  if (metadata) {
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'metadata', data: metadata })}\n\n`))
-                  }
-                  controller.enqueue(encoder.encode('data: [DONE]\n\n'))
-                  continue
-                }
-
-                try {
-                  const parsed = JSON.parse(data)
-                  const content = parsed.choices?.[0]?.delta?.content || ''
-                  if (content) {
-                    fullContent += content
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'content', data: content })}\n\n`))
-                  }
-                } catch (e) {
-                  // JSON 파싱 실패 무시
-                }
-              }
+          for await (const chunk of result.stream) {
+            const text = chunk.text()
+            if (text) {
+              fullContent += text
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'content', data: text })}\n\n`))
             }
           }
+
+          // 요구사항 카드 파싱
+          const metadata = parseRequirementCard(fullContent)
+          if (metadata) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'metadata', data: metadata })}\n\n`))
+          }
+          
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+        } catch (error) {
+          console.error('Stream error:', error)
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'error', data: '스트리밍 오류가 발생했습니다.' })}\n\n`))
         } finally {
-          reader.releaseLock()
           controller.close()
         }
       }
@@ -265,4 +230,3 @@ function createDummyStreamResponse(message: string, messages: Array<{ role: stri
     },
   })
 }
-

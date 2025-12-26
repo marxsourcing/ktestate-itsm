@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/server'
 import { MessageSquare, LayoutGrid, Briefcase, Settings, BarChart3 } from 'lucide-react'
@@ -29,10 +30,13 @@ export async function Header() {
           href={user ? '/chat' : '/'} 
           className="flex items-center gap-2.5 font-semibold text-gray-900 hover:opacity-80 transition-opacity"
         >
-          {/* KT Style Logo */}
-          <div className="flex size-8 items-center justify-center rounded-lg kt-gradient">
-            <span className="text-sm font-bold text-white">KT</span>
-          </div>
+          <Image 
+            src="/img/kt_logo.png" 
+            alt="KT Logo" 
+            width={32} 
+            height={32}
+            className="object-contain"
+          />
           <span className="hidden sm:inline text-[15px]">Estate IT</span>
         </Link>
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 
 const SYSTEM_PROMPT = `당신은 KT Estate의 IT 서비스 요구사항 접수를 도와주는 AI 어시스턴트입니다.
 
@@ -51,44 +52,44 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '메시지가 필요합니다.' }, { status: 400 })
     }
 
-    // OpenAI API 호출
-    const openaiApiKey = process.env.OPENAI_API_KEY
+    // Gemini API 호출
+    const geminiApiKey = process.env.GEMINI_API_KEY
 
-    if (!openaiApiKey) {
+    if (!geminiApiKey) {
       // API 키가 없으면 더미 응답
       return NextResponse.json(generateDummyResponse(message, messages))
     }
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${openaiApiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          ...messages.slice(-10).map((m: { role: string; content: string }) => ({
-            role: m.role,
-            content: m.content,
-          })),
-        ],
-        temperature: 0.7,
-        max_tokens: 1000,
-      }),
+    const genAI = new GoogleGenerativeAI(geminiApiKey)
+    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' })
+
+    // 대화 기록을 Gemini 형식으로 변환
+    const chatHistory = messages.slice(-10).map((m: { role: string; content: string }) => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }],
+    }))
+
+    const chat = model.startChat({
+      history: chatHistory,
+      systemInstruction: SYSTEM_PROMPT,
     })
 
-    if (!response.ok) {
-      console.error('OpenAI API error:', await response.text())
-      return NextResponse.json(generateDummyResponse(message, messages))
-    }
-
-    const data = await response.json()
-    const aiContent = data.choices[0]?.message?.content
+    const result = await chat.sendMessage(message)
+    const aiContent = result.response.text()
 
     // JSON 파싱 시도
     try {
+      // JSON 블록 추출 시도
+      const jsonMatch = aiContent.match(/```json\s*([\s\S]*?)```/) || 
+                        aiContent.match(/\{[\s\S]*"content"[\s\S]*\}/)
+      
+      if (jsonMatch) {
+        const jsonStr = jsonMatch[1] || jsonMatch[0]
+        const parsed = JSON.parse(jsonStr.trim())
+        return NextResponse.json(parsed)
+      }
+      
+      // 전체가 JSON인 경우
       const parsed = JSON.parse(aiContent)
       return NextResponse.json(parsed)
     } catch {
@@ -106,7 +107,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// OpenAI API 키가 없을 때 사용하는 더미 응답 생성
+// Gemini API 키가 없을 때 사용하는 더미 응답 생성
 function generateDummyResponse(message: string, messages: Array<{ role: string; content: string }>) {
   const messageCount = messages?.length || 0
 
@@ -122,8 +123,6 @@ function generateDummyResponse(message: string, messages: Array<{ role: string; 
 
   let detectedSystem = ''
   let detectedType: 'feature' | 'improvement' | 'bug' | 'other' = 'other'
-
-  const lowerMessage = message.toLowerCase()
 
   // 시스템 감지
   for (const sys of keywords.systems) {
@@ -175,4 +174,3 @@ function generateDummyResponse(message: string, messages: Array<{ role: string; 
     },
   }
 }
-
