@@ -71,7 +71,10 @@ export async function POST(request: NextRequest) {
 
     const chat = model.startChat({
       history: chatHistory,
-      systemInstruction: SYSTEM_PROMPT,
+      systemInstruction: {
+        role: 'user',
+        parts: [{ text: SYSTEM_PROMPT }],
+      },
     })
 
     const result = await chat.sendMessage(message)

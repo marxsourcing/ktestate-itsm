@@ -26,42 +26,61 @@ export function ConversationList() {
   const currentConversationId = pathname.split('/chat/')[1]
 
   useEffect(() => {
-    loadConversations()
-
-    // 실시간 구독
     const supabase = createClient()
-    const channel = supabase
-      .channel('conversations')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'conversations',
-        },
-        () => {
-          loadConversations()
-        }
-      )
-      .subscribe()
+    let channel: ReturnType<typeof supabase.channel> | null = null
+
+    async function loadConversations() {
+      const { data: { user } } = await supabase.auth.getUser()
+
+      if (!user) {
+        setIsLoading(false)
+        return
+      }
+
+      const { data } = await supabase
+        .from('conversations')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('updated_at', { ascending: false })
+
+      if (data) {
+        setConversations(data)
+      }
+      setIsLoading(false)
+    }
+
+    async function setup() {
+      await loadConversations()
+
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      // 실시간 구독 - 현재 사용자의 대화만
+      channel = supabase
+        .channel('my-conversations')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'conversations',
+            filter: `user_id=eq.${user.id}`,
+          },
+          () => {
+            loadConversations()
+          }
+        )
+        .subscribe()
+    }
+
+    setup()
 
     return () => {
-      supabase.removeChannel(channel)
+      if (channel) {
+        supabase.removeChannel(channel)
+      }
     }
   }, [])
-
-  async function loadConversations() {
-    const supabase = createClient()
-    const { data } = await supabase
-      .from('conversations')
-      .select('*')
-      .order('updated_at', { ascending: false })
-
-    if (data) {
-      setConversations(data)
-    }
-    setIsLoading(false)
-  }
 
   async function handleNewConversation() {
     startTransition(async () => {
@@ -138,14 +157,14 @@ export function ConversationList() {
                     : 'text-gray-700 hover:bg-gray-100'
                 )}
               >
-                <MessageSquare className="size-4 flex-shrink-0" />
+                <MessageSquare className="size-4 shrink-0" />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="truncate text-sm font-medium">
                       {conv.title}
                     </span>
                     {conv.status === 'confirmed' && (
-                      <CheckCircle2 className="size-3.5 text-rose-500 flex-shrink-0" />
+                      <CheckCircle2 className="size-3.5 text-rose-500 shrink-0" />
                     )}
                   </div>
                   <span className="text-xs text-gray-400">
