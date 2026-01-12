@@ -51,19 +51,11 @@ const TYPE_LABELS: Record<string, string> = {
 
 interface RequestCardProps {
   request: Request
-  draggable?: boolean
-  onDragStart?: (e: React.DragEvent) => void
-  onDragEnd?: () => void
-  isDragging?: boolean
   compact?: boolean
 }
 
 export function RequestCard({
   request,
-  draggable = false,
-  onDragStart,
-  onDragEnd,
-  isDragging = false,
   compact = false,
 }: RequestCardProps) {
   const priority = PRIORITY_CONFIG[request.priority as keyof typeof PRIORITY_CONFIG] || PRIORITY_CONFIG.medium
@@ -87,15 +79,10 @@ export function RequestCard({
   return (
     <Link
       href={`/requests/${request.id}`}
-      draggable={draggable}
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
       className={cn(
         'block rounded-lg border bg-white p-4 transition-all cursor-pointer',
         'hover:shadow-md hover:border-primary/30 hover:-translate-y-0.5',
-        'group',
-        isDragging && 'opacity-50 rotate-2 shadow-xl',
-        draggable && 'cursor-grab active:cursor-grabbing'
+        'group'
       )}
     >
       {/* Header: Priority + Time */}
