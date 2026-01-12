@@ -66,13 +66,13 @@ export function TopSystems() {
               axisLine={{ stroke: '#e5e7eb' }}
               allowDecimals={false}
             />
-            <YAxis 
+            <YAxis
               type="category"
               dataKey="system_name"
-              tick={{ fontSize: 12, fill: '#6b7280' }}
+              tick={{ fontSize: 11, fill: '#6b7280' }}
               tickLine={false}
               axisLine={false}
-              width={80}
+              width={120}
             />
             <Tooltip 
               contentStyle={{ 
