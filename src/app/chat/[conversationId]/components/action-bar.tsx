@@ -65,11 +65,11 @@ export function ActionBar({ conversationId }: ActionBarProps) {
   function mapTypeToSrType(type?: string): string {
     switch (type) {
       case 'feature':
-        return 'software'
+        return 'feature_add'
       case 'improvement':
-        return 'software'
+        return 'feature_improve'
       case 'bug':
-        return 'software'
+        return 'bug_fix'
       default:
         return 'other'
     }

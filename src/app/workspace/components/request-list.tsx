@@ -73,10 +73,9 @@ const PRIORITY_CONFIG = {
 }
 
 const TYPE_LABELS: Record<string, string> = {
-  account: '계정',
-  software: '소프트웨어',
-  hardware: '하드웨어',
-  network: '네트워크',
+  feature_add: '기능추가',
+  feature_improve: '기능개선',
+  bug_fix: '버그수정',
   other: '기타',
 }
 
