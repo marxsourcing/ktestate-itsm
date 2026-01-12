@@ -45,6 +45,7 @@ export function ActionBar({ conversationId }: ActionBarProps) {
         title: requirementCard.title,
         description: requirementCard.description || '',
         type: mapTypeToSrType(requirementCard.type),
+        system: requirementCard.system,
       })
 
       if (result.error) {

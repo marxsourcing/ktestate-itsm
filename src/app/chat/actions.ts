@@ -169,6 +169,7 @@ export async function confirmRequirement(
     title: string
     description: string
     type: string
+    system?: string
     system_id?: string
   }
 ) {
@@ -179,6 +180,41 @@ export async function confirmRequirement(
     return { error: '로그인이 필요합니다.' }
   }
 
+  // 시스템 이름 또는 코드로 system_id 조회
+  let systemId = requirementData.system_id
+  if (!systemId && requirementData.system) {
+    // 1. 정확한 이름 매칭
+    let { data: systemData } = await supabase
+      .from('systems')
+      .select('id')
+      .eq('name', requirementData.system)
+      .maybeSingle()
+
+    // 2. 코드로 매칭 (예: "ERP" -> 전사적자원관리(ERP))
+    if (!systemData) {
+      const { data: systemByCode } = await supabase
+        .from('systems')
+        .select('id')
+        .eq('code', requirementData.system.toUpperCase())
+        .maybeSingle()
+      systemData = systemByCode
+    }
+
+    // 3. 이름에 포함된 경우 (예: "ERP" -> 전사적자원관리(ERP))
+    if (!systemData) {
+      const { data: systemByPartial } = await supabase
+        .from('systems')
+        .select('id')
+        .ilike('name', `%${requirementData.system}%`)
+        .maybeSingle()
+      systemData = systemByPartial
+    }
+
+    if (systemData) {
+      systemId = systemData.id
+    }
+  }
+
   // 서비스 요청 생성
   const { data: request, error: reqError } = await supabase
     .from('service_requests')
@@ -187,7 +223,7 @@ export async function confirmRequirement(
       title: requirementData.title,
       description: requirementData.description,
       type: requirementData.type || 'other',
-      system_id: requirementData.system_id,
+      system_id: systemId,
       status: 'requested',
       priority: 'medium',
     })

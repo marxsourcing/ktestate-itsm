@@ -1,12 +1,19 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { ClipboardList, ChevronDown, Pencil, Check } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { createClient } from '@/lib/supabase/client'
+
+interface System {
+  id: string
+  name: string
+  code: string | null
+}
 
 interface RequirementData {
   system?: string
@@ -41,6 +48,36 @@ export function RequirementCard({ data, onUpdate, readOnly = false }: Requiremen
   const [isEditing, setIsEditing] = useState(false)
   const [editData, setEditData] = useState(data)
   const [isExpanded, setIsExpanded] = useState(true)
+  const [systems, setSystems] = useState<System[]>([])
+  const [isLoadingSystems, setIsLoadingSystems] = useState(false)
+
+  // 시스템 목록 로드
+  useEffect(() => {
+    if (isEditing && systems.length === 0) {
+      loadSystems()
+    }
+  }, [isEditing])
+
+  async function loadSystems() {
+    setIsLoadingSystems(true)
+    try {
+      const supabase = createClient()
+      const { data: systemsData, error } = await supabase
+        .from('systems')
+        .select('id, name, code')
+        .order('name')
+
+      if (error) {
+        console.error('Failed to load systems:', error)
+      } else {
+        setSystems(systemsData || [])
+      }
+    } catch (err) {
+      console.error('Error loading systems:', err)
+    } finally {
+      setIsLoadingSystems(false)
+    }
+  }
 
   function handleSave() {
     onUpdate?.(editData)
@@ -75,12 +112,22 @@ export function RequirementCard({ data, onUpdate, readOnly = false }: Requiremen
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
                   <label className="text-xs text-gray-500 mb-1 block">시스템</label>
-                  <Input
+                  <select
                     value={editData.system || ''}
                     onChange={(e) => setEditData({ ...editData, system: e.target.value })}
-                    className="bg-white border-gray-300 text-gray-900"
-                    placeholder="시스템 선택"
-                  />
+                    className="w-full h-10 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-rose-100 focus:border-rose-400"
+                    disabled={isLoadingSystems}
+                  >
+                    <option value="">시스템 선택</option>
+                    {systems.map((system) => (
+                      <option key={system.id} value={system.name}>
+                        {system.name}
+                      </option>
+                    ))}
+                  </select>
+                  {isLoadingSystems && (
+                    <p className="text-xs text-gray-400 mt-1">시스템 목록 로딩 중...</p>
+                  )}
                 </div>
                 <div>
                   <label className="text-xs text-gray-500 mb-1 block">모듈</label>
@@ -88,7 +135,7 @@ export function RequirementCard({ data, onUpdate, readOnly = false }: Requiremen
                     value={editData.module || ''}
                     onChange={(e) => setEditData({ ...editData, module: e.target.value })}
                     className="bg-white border-gray-300 text-gray-900"
-                    placeholder="모듈 선택"
+                    placeholder="모듈 입력"
                   />
                 </div>
               </div>
