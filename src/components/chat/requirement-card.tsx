@@ -1,17 +1,24 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { ClipboardList, ChevronDown, Pencil, Check } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { createClient } from '@/lib/supabase/client'
+
+interface System {
+  id: string
+  name: string
+  code: string | null
+}
 
 interface RequirementData {
   system?: string
   module?: string
-  type?: 'feature' | 'improvement' | 'bug' | 'other'
+  type?: 'feature_add' | 'feature_improve' | 'bug_fix' | 'other' | 'feature' | 'improvement' | 'bug'
   title?: string
   description?: string
 }
@@ -22,17 +29,55 @@ interface RequirementCardProps {
   readOnly?: boolean
 }
 
-const typeLabels = {
-  feature: { label: '기능 추가', color: 'bg-blue-100 text-blue-700 border-blue-200' },
-  improvement: { label: '기능 개선', color: 'bg-rose-100 text-rose-700 border-rose-200' },
-  bug: { label: '버그 수정', color: 'bg-red-100 text-red-700 border-red-200' },
+const typeLabels: Record<string, { label: string; color: string }> = {
+  // 새 유형 코드
+  feature_add: { label: '기능추가', color: 'bg-blue-100 text-blue-700 border-blue-200' },
+  feature_improve: { label: '기능개선', color: 'bg-rose-100 text-rose-700 border-rose-200' },
+  bug_fix: { label: '버그수정', color: 'bg-red-100 text-red-700 border-red-200' },
   other: { label: '기타', color: 'bg-gray-100 text-gray-700 border-gray-200' },
+  // 구 유형 코드 호환성
+  feature: { label: '기능추가', color: 'bg-blue-100 text-blue-700 border-blue-200' },
+  improvement: { label: '기능개선', color: 'bg-rose-100 text-rose-700 border-rose-200' },
+  bug: { label: '버그수정', color: 'bg-red-100 text-red-700 border-red-200' },
 }
+
+// 새 유형만 표시 (편집 모드용)
+const editableTypes = ['feature_add', 'feature_improve', 'bug_fix', 'other'] as const
 
 export function RequirementCard({ data, onUpdate, readOnly = false }: RequirementCardProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [editData, setEditData] = useState(data)
   const [isExpanded, setIsExpanded] = useState(true)
+  const [systems, setSystems] = useState<System[]>([])
+  const [isLoadingSystems, setIsLoadingSystems] = useState(false)
+
+  // 시스템 목록 로드
+  useEffect(() => {
+    if (isEditing && systems.length === 0) {
+      loadSystems()
+    }
+  }, [isEditing])
+
+  async function loadSystems() {
+    setIsLoadingSystems(true)
+    try {
+      const supabase = createClient()
+      const { data: systemsData, error } = await supabase
+        .from('systems')
+        .select('id, name, code')
+        .order('name')
+
+      if (error) {
+        console.error('Failed to load systems:', error)
+      } else {
+        setSystems(systemsData || [])
+      }
+    } catch (err) {
+      console.error('Error loading systems:', err)
+    } finally {
+      setIsLoadingSystems(false)
+    }
+  }
 
   function handleSave() {
     onUpdate?.(editData)
@@ -67,12 +112,22 @@ export function RequirementCard({ data, onUpdate, readOnly = false }: Requiremen
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
                   <label className="text-xs text-gray-500 mb-1 block">시스템</label>
-                  <Input
+                  <select
                     value={editData.system || ''}
                     onChange={(e) => setEditData({ ...editData, system: e.target.value })}
-                    className="bg-white border-gray-300 text-gray-900"
-                    placeholder="시스템 선택"
-                  />
+                    className="w-full h-10 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-rose-100 focus:border-rose-400"
+                    disabled={isLoadingSystems}
+                  >
+                    <option value="">시스템 선택</option>
+                    {systems.map((system) => (
+                      <option key={system.id} value={system.name}>
+                        {system.name}
+                      </option>
+                    ))}
+                  </select>
+                  {isLoadingSystems && (
+                    <p className="text-xs text-gray-400 mt-1">시스템 목록 로딩 중...</p>
+                  )}
                 </div>
                 <div>
                   <label className="text-xs text-gray-500 mb-1 block">모듈</label>
@@ -80,7 +135,7 @@ export function RequirementCard({ data, onUpdate, readOnly = false }: Requiremen
                     value={editData.module || ''}
                     onChange={(e) => setEditData({ ...editData, module: e.target.value })}
                     className="bg-white border-gray-300 text-gray-900"
-                    placeholder="모듈 선택"
+                    placeholder="모듈 입력"
                   />
                 </div>
               </div>
@@ -88,21 +143,29 @@ export function RequirementCard({ data, onUpdate, readOnly = false }: Requiremen
               <div>
                 <label className="text-xs text-gray-500 mb-2 block">유형</label>
                 <div className="flex gap-2 flex-wrap">
-                  {Object.entries(typeLabels).map(([key, value]) => (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => setEditData({ ...editData, type: key as RequirementData['type'] })}
-                      className={cn(
-                        'px-3 py-1.5 rounded-lg text-sm border transition-all',
-                        editData.type === key
-                          ? value.color
-                          : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
-                      )}
-                    >
-                      {value.label}
-                    </button>
-                  ))}
+                  {editableTypes.map((key) => {
+                    const value = typeLabels[key]
+                    // 현재 데이터의 유형이 구 코드인 경우 새 코드로 매핑
+                    const normalizedType = editData.type === 'feature' ? 'feature_add'
+                      : editData.type === 'improvement' ? 'feature_improve'
+                      : editData.type === 'bug' ? 'bug_fix'
+                      : editData.type
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setEditData({ ...editData, type: key })}
+                        className={cn(
+                          'px-3 py-1.5 rounded-lg text-sm border transition-all',
+                          normalizedType === key
+                            ? value.color
+                            : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
+                        )}
+                      >
+                        {value.label}
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
 

@@ -56,10 +56,9 @@ export function RequestForm({ systems }: RequestFormProps) {
               <SelectValue placeholder="유형 선택" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="account">계정/권한</SelectItem>
-              <SelectItem value="software">소프트웨어</SelectItem>
-              <SelectItem value="hardware">하드웨어</SelectItem>
-              <SelectItem value="network">네트워크</SelectItem>
+              <SelectItem value="feature_add">기능추가</SelectItem>
+              <SelectItem value="feature_improve">기능개선</SelectItem>
+              <SelectItem value="bug_fix">버그수정</SelectItem>
               <SelectItem value="other">기타</SelectItem>
             </SelectContent>
           </Select>
@@ -88,7 +87,7 @@ export function RequestForm({ systems }: RequestFormProps) {
             <SelectValue placeholder="시스템 선택" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">해당 없음</SelectItem>
+            <SelectItem value="none">해당 없음</SelectItem>
             {systems.map((system) => (
               <SelectItem key={system.id} value={system.id}>
                 {system.name}

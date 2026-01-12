@@ -50,9 +50,10 @@ export function ChatInput({
 
     const newFiles: PendingFile[] = Array.from(files).map(file => {
       const isImage = file.type.startsWith('image/')
+      const preview = isImage ? URL.createObjectURL(file) : undefined
       return {
         file,
-        preview: isImage ? URL.createObjectURL(file) : undefined
+        preview
       }
     })
 
@@ -73,7 +74,7 @@ export function ChatInput({
   // 파일 업로드
   const uploadFiles = useCallback(async (): Promise<AttachmentData[]> => {
     const uploadedAttachments: AttachmentData[] = []
-    
+
     for (let i = 0; i < pendingFiles.length; i++) {
       const pf = pendingFiles[i]
       if (pf.uploaded) {
@@ -81,7 +82,7 @@ export function ChatInput({
         continue
       }
 
-      setPendingFiles(prev => prev.map((f, idx) => 
+      setPendingFiles(prev => prev.map((f, idx) =>
         idx === i ? { ...f, uploading: true } : f
       ))
 
@@ -91,12 +92,12 @@ export function ChatInput({
       const result = await uploadAttachment(formData, messageId, requestId)
 
       if (result.error) {
-        setPendingFiles(prev => prev.map((f, idx) => 
+        setPendingFiles(prev => prev.map((f, idx) =>
           idx === i ? { ...f, uploading: false, error: result.error } : f
         ))
       } else if (result.attachment) {
         uploadedAttachments.push(result.attachment)
-        setPendingFiles(prev => prev.map((f, idx) => 
+        setPendingFiles(prev => prev.map((f, idx) =>
           idx === i ? { ...f, uploading: false, uploaded: result.attachment } : f
         ))
       }

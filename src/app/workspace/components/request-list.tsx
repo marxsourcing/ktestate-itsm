@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -73,10 +73,9 @@ const PRIORITY_CONFIG = {
 }
 
 const TYPE_LABELS: Record<string, string> = {
-  account: '계정',
-  software: '소프트웨어',
-  hardware: '하드웨어',
-  network: '네트워크',
+  feature_add: '기능추가',
+  feature_improve: '기능개선',
+  bug_fix: '버그수정',
   other: '기타',
 }
 
@@ -256,7 +255,12 @@ function RequestItem({
   completed?: boolean
 }) {
   const config = PRIORITY_CONFIG[priority] || PRIORITY_CONFIG.medium
-  const timeAgo = getTimeAgo(request.created_at)
+  const [timeAgo, setTimeAgo] = useState<string>('')
+
+  // 클라이언트에서만 시간 계산 (Hydration mismatch 방지)
+  useEffect(() => {
+    setTimeAgo(getTimeAgo(request.created_at))
+  }, [request.created_at])
 
   return (
     <button

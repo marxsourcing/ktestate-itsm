@@ -51,20 +51,25 @@ export async function uploadAttachment(
 
   // 고유한 파일 경로 생성
   const timestamp = Date.now()
-  const safeName = file.name.replace(/[^a-zA-Z0-9가-힣._-]/g, '_')
-  const storagePath = `${user.id}/${timestamp}_${safeName}`
+  // Supabase Storage는 한글/특수문자를 허용하지 않음 - ASCII만 허용
+  const extension = file.name.split('.').pop() || ''
+  const safeName = `file_${timestamp}.${extension}`
+  const storagePath = `${user.id}/${safeName}`
 
-  // Storage에 파일 업로드
+  // File을 ArrayBuffer로 변환 (Server Action 환경에서 필요)
+  const arrayBuffer = await file.arrayBuffer()
+  const fileBuffer = new Uint8Array(arrayBuffer)
+
   const { error: uploadError } = await supabase.storage
     .from('attachments')
-    .upload(storagePath, file, {
+    .upload(storagePath, fileBuffer, {
       cacheControl: '3600',
-      upsert: false
+      upsert: false,
+      contentType: file.type
     })
 
   if (uploadError) {
-    console.error('Upload error:', uploadError)
-    return { error: '파일 업로드에 실패했습니다.' }
+    return { error: `파일 업로드에 실패했습니다: ${uploadError.message}` }
   }
 
   // attachments 테이블에 기록
@@ -83,10 +88,9 @@ export async function uploadAttachment(
     .single()
 
   if (dbError) {
-    console.error('DB error:', dbError)
     // 업로드된 파일 삭제
     await supabase.storage.from('attachments').remove([storagePath])
-    return { error: '파일 정보 저장에 실패했습니다.' }
+    return { error: `파일 정보 저장에 실패했습니다: ${dbError.message}` }
   }
 
   // Signed URL 생성
@@ -146,9 +150,7 @@ export async function deleteAttachment(attachmentId: string): Promise<{ success?
     .from('attachments')
     .remove([attachment.storage_path])
 
-  if (storageError) {
-    console.error('Storage delete error:', storageError)
-  }
+  // Storage 삭제 실패는 무시 (DB 삭제 진행)
 
   // DB에서 레코드 삭제
   const { error: dbError } = await supabase

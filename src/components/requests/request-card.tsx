@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
@@ -43,60 +44,51 @@ const PRIORITY_CONFIG = {
 }
 
 const TYPE_LABELS: Record<string, string> = {
-  account: '계정',
-  software: '소프트웨어',
-  hardware: '하드웨어',
-  network: '네트워크',
+  feature_add: '기능추가',
+  feature_improve: '기능개선',
+  bug_fix: '버그수정',
   other: '기타',
 }
 
 interface RequestCardProps {
   request: Request
-  draggable?: boolean
-  onDragStart?: (e: React.DragEvent) => void
-  onDragEnd?: () => void
-  isDragging?: boolean
   compact?: boolean
 }
 
 export function RequestCard({
   request,
-  draggable = false,
-  onDragStart,
-  onDragEnd,
-  isDragging = false,
   compact = false,
 }: RequestCardProps) {
   const priority = PRIORITY_CONFIG[request.priority as keyof typeof PRIORITY_CONFIG] || PRIORITY_CONFIG.medium
   const PriorityIcon = priority.icon
-  
-  const createdDate = new Date(request.created_at)
-  const now = new Date()
-  const diffDays = Math.floor((now.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24))
-  
-  let timeAgo = ''
-  if (diffDays === 0) {
-    timeAgo = '오늘'
-  } else if (diffDays === 1) {
-    timeAgo = '어제'
-  } else if (diffDays < 7) {
-    timeAgo = `${diffDays}일 전`
-  } else {
-    timeAgo = createdDate.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })
-  }
+  const [timeAgo, setTimeAgo] = useState<string>('')
+
+  // 클라이언트에서만 시간 계산 (Hydration mismatch 방지)
+  useEffect(() => {
+    const createdDate = new Date(request.created_at)
+    const now = new Date()
+    const diffDays = Math.floor((now.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24))
+
+    let time = ''
+    if (diffDays === 0) {
+      time = '오늘'
+    } else if (diffDays === 1) {
+      time = '어제'
+    } else if (diffDays < 7) {
+      time = `${diffDays}일 전`
+    } else {
+      time = createdDate.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })
+    }
+    setTimeAgo(time)
+  }, [request.created_at])
 
   return (
     <Link
       href={`/requests/${request.id}`}
-      draggable={draggable}
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
       className={cn(
         'block rounded-lg border bg-white p-4 transition-all cursor-pointer',
         'hover:shadow-md hover:border-primary/30 hover:-translate-y-0.5',
-        'group',
-        isDragging && 'opacity-50 rotate-2 shadow-xl',
-        draggable && 'cursor-grab active:cursor-grabbing'
+        'group'
       )}
     >
       {/* Header: Priority + Time */}

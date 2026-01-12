@@ -1,59 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { KanbanBoard, type Request } from '@/components/requests/kanban-board'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import Link from 'next/link'
-import { Plus, Search, Filter, LayoutGrid, List } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { redirect } from 'next/navigation'
-import { revalidatePath } from 'next/cache'
-
-// 상태 변경 Server Action
-async function updateStatus(requestId: string, newStatus: string) {
-  'use server'
-  
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  
-  if (!user) {
-    throw new Error('로그인이 필요합니다.')
-  }
-
-  // 현재 상태 조회
-  const { data: request } = await supabase
-    .from('service_requests')
-    .select('status')
-    .eq('id', requestId)
-    .single()
-
-  const previousStatus = request?.status
-
-  // 상태 업데이트
-  const updateData: { status: string; completed_at?: string } = { status: newStatus }
-  if (newStatus === 'completed') {
-    updateData.completed_at = new Date().toISOString()
-  }
-
-  const { error } = await supabase
-    .from('service_requests')
-    .update(updateData)
-    .eq('id', requestId)
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  // 히스토리 기록
-  await supabase.from('sr_history').insert({
-    request_id: requestId,
-    actor_id: user.id,
-    action: 'status_change',
-    previous_status: previousStatus,
-    new_status: newStatus,
-    note: `상태 변경: ${previousStatus} → ${newStatus}`,
-  })
-
-  revalidatePath('/requests')
-}
 
 export default async function RequestsPage() {
   const supabase = await createClient()
@@ -127,11 +77,10 @@ export default async function RequestsPage() {
         </div>
       </div>
 
-      {/* Kanban Board */}
+      {/* Kanban Board - 조회 전용 (드래그앤드롭 상태 변경 비활성화) */}
       <div className="flex-1 overflow-hidden p-6">
-        <KanbanBoard 
-          requests={(requests as Request[]) || []} 
-          onStatusChange={isManager ? updateStatus : undefined}
+        <KanbanBoard
+          requests={(requests as Request[]) || []}
         />
       </div>
     </div>

@@ -1,14 +1,12 @@
 'use client'
 
-import { useState, useTransition } from 'react'
 import { cn } from '@/lib/utils'
 import { RequestCard } from './request-card'
 import { Badge } from '@/components/ui/badge'
-import { 
-  Clock, 
-  Search, 
-  Loader2, 
-  CheckCircle2, 
+import {
+  Search,
+  Loader2,
+  CheckCircle2,
   XCircle,
   Inbox
 } from 'lucide-react'
@@ -73,54 +71,11 @@ export type Request = {
 
 interface KanbanBoardProps {
   requests: Request[]
-  onStatusChange?: (requestId: string, newStatus: string) => Promise<void>
 }
 
-export function KanbanBoard({ requests, onStatusChange }: KanbanBoardProps) {
-  const [draggedItem, setDraggedItem] = useState<string | null>(null)
-  const [dragOverColumn, setDragOverColumn] = useState<string | null>(null)
-  const [isPending, startTransition] = useTransition()
-
+export function KanbanBoard({ requests }: KanbanBoardProps) {
   const getRequestsByStatus = (status: string) => {
     return requests.filter((r) => r.status === status)
-  }
-
-  const handleDragStart = (e: React.DragEvent, requestId: string) => {
-    setDraggedItem(requestId)
-    e.dataTransfer.effectAllowed = 'move'
-    e.dataTransfer.setData('text/plain', requestId)
-  }
-
-  const handleDragOver = (e: React.DragEvent, columnId: string) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-    setDragOverColumn(columnId)
-  }
-
-  const handleDragLeave = () => {
-    setDragOverColumn(null)
-  }
-
-  const handleDrop = async (e: React.DragEvent, columnId: string) => {
-    e.preventDefault()
-    const requestId = e.dataTransfer.getData('text/plain')
-    
-    if (requestId && onStatusChange) {
-      const request = requests.find((r) => r.id === requestId)
-      if (request && request.status !== columnId) {
-        startTransition(async () => {
-          await onStatusChange(requestId, columnId)
-        })
-      }
-    }
-    
-    setDraggedItem(null)
-    setDragOverColumn(null)
-  }
-
-  const handleDragEnd = () => {
-    setDraggedItem(null)
-    setDragOverColumn(null)
   }
 
   return (
@@ -128,19 +83,14 @@ export function KanbanBoard({ requests, onStatusChange }: KanbanBoardProps) {
       {STATUS_COLUMNS.map((column) => {
         const columnRequests = getRequestsByStatus(column.id)
         const Icon = column.icon
-        const isOver = dragOverColumn === column.id
 
         return (
           <div
             key={column.id}
             className={cn(
               'flex-shrink-0 w-[320px] flex flex-col rounded-xl',
-              'bg-white border transition-all duration-200',
-              isOver ? 'border-primary shadow-lg scale-[1.01]' : 'border-gray-200'
+              'bg-white border border-gray-200'
             )}
-            onDragOver={(e) => handleDragOver(e, column.id)}
-            onDragLeave={handleDragLeave}
-            onDrop={(e) => handleDrop(e, column.id)}
           >
             {/* Column Header */}
             <div className={cn('p-4 rounded-t-xl', column.bgColor)}>
@@ -154,8 +104,8 @@ export function KanbanBoard({ requests, onStatusChange }: KanbanBoardProps) {
                 <div className="flex-1">
                   <h3 className="font-semibold text-gray-800">{column.label}</h3>
                 </div>
-                <Badge 
-                  variant="secondary" 
+                <Badge
+                  variant="secondary"
                   className="bg-white/80 text-gray-700"
                 >
                   {columnRequests.length}
@@ -165,13 +115,7 @@ export function KanbanBoard({ requests, onStatusChange }: KanbanBoardProps) {
 
             {/* Column Content */}
             <div className="flex-1 p-3 space-y-3 overflow-y-auto min-h-[200px] max-h-[calc(100vh-280px)]">
-              {isPending && dragOverColumn === column.id && (
-                <div className="flex items-center justify-center py-4">
-                  <Loader2 className="size-5 animate-spin text-gray-400" />
-                </div>
-              )}
-              
-              {columnRequests.length === 0 && !isPending ? (
+              {columnRequests.length === 0 ? (
                 <div className={cn(
                   'flex flex-col items-center justify-center py-8 rounded-lg border-2 border-dashed',
                   column.borderColor
@@ -184,10 +128,6 @@ export function KanbanBoard({ requests, onStatusChange }: KanbanBoardProps) {
                   <RequestCard
                     key={request.id}
                     request={request}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, request.id)}
-                    onDragEnd={handleDragEnd}
-                    isDragging={draggedItem === request.id}
                   />
                 ))
               )}

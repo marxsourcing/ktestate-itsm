@@ -16,7 +16,7 @@ export interface Message {
     requirementCard?: {
       system?: string
       module?: string
-      type?: 'feature' | 'improvement' | 'bug' | 'other'
+      type?: 'feature_add' | 'feature_improve' | 'bug_fix' | 'other' | 'feature' | 'improvement' | 'bug'
       title?: string
       description?: string
     }

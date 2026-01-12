@@ -3,18 +3,15 @@ import { notFound, redirect } from 'next/navigation'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
-import { 
-  ChevronLeft, 
-  Calendar, 
-  User, 
-  Tag, 
-  AlertCircle, 
+import {
+  ChevronLeft,
+  Calendar,
+  User,
   Server,
   Clock,
   CheckCircle2,
   MessageCircle
 } from 'lucide-react'
-import { StatusUpdate } from './components/status-update'
 import { HistoryTimeline } from './components/history-timeline'
 import { CommentsSection } from './components/comments-section'
 import { RequestChatArea } from './components/request-chat-area'
@@ -35,10 +32,9 @@ const PRIORITY_CONFIG = {
 }
 
 const TYPE_LABELS: Record<string, string> = {
-  account: '계정',
-  software: '소프트웨어',
-  hardware: '하드웨어',
-  network: '네트워크',
+  feature_add: '기능추가',
+  feature_improve: '기능개선',
+  bug_fix: '버그수정',
   other: '기타',
 }
 
@@ -132,12 +128,6 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
               {request.title}
             </h1>
           </div>
-
-          <StatusUpdate 
-            requestId={request.id} 
-            currentStatus={request.status} 
-            isManager={isManager} 
-          />
         </div>
       </div>
 

@@ -67,8 +67,8 @@ export function ChatArea({ conversationId, initialMessages, conversationStatus }
 
     try {
       // 사용자 메시지의 metadata (첨부파일 포함)
-      const userMetadata = attachments && attachments.length > 0 
-        ? { attachments } 
+      const userMetadata = attachments && attachments.length > 0
+        ? { attachments }
         : undefined
 
       // 사용자 메시지 추가
@@ -94,7 +94,8 @@ export function ChatArea({ conversationId, initialMessages, conversationStatus }
           attachments: attachments?.map(a => ({
             file_name: a.file_name,
             file_type: a.file_type,
-            file_size: a.file_size
+            file_size: a.file_size,
+            url: a.url  // 이미지 URL 전달 (AI가 분석할 수 있도록)
           }))
         }),
       })
