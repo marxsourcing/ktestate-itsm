@@ -26,16 +26,8 @@ export async function uploadAttachment(
 
   const file = formData.get('file') as File
   if (!file) {
-    console.error('No file in FormData')
     return { error: '파일이 없습니다.' }
   }
-
-  console.log('File received:', {
-    name: file.name,
-    type: file.type,
-    size: file.size,
-    isFile: file instanceof File
-  })
 
   // 파일 크기 제한 (50MB)
   if (file.size > 50 * 1024 * 1024) {
@@ -64,9 +56,6 @@ export async function uploadAttachment(
   const safeName = `file_${timestamp}.${extension}`
   const storagePath = `${user.id}/${safeName}`
 
-  // Storage에 파일 업로드
-  console.log('Uploading file:', { storagePath, fileType: file.type, fileSize: file.size })
-
   // File을 ArrayBuffer로 변환 (Server Action 환경에서 필요)
   const arrayBuffer = await file.arrayBuffer()
   const fileBuffer = new Uint8Array(arrayBuffer)
@@ -80,11 +69,8 @@ export async function uploadAttachment(
     })
 
   if (uploadError) {
-    console.error('Storage upload error:', uploadError)
     return { error: `파일 업로드에 실패했습니다: ${uploadError.message}` }
   }
-
-  console.log('Storage upload successful')
 
   // attachments 테이블에 기록
   const { data: attachment, error: dbError } = await supabase
@@ -102,13 +88,10 @@ export async function uploadAttachment(
     .single()
 
   if (dbError) {
-    console.error('DB insert error:', dbError)
     // 업로드된 파일 삭제
     await supabase.storage.from('attachments').remove([storagePath])
     return { error: `파일 정보 저장에 실패했습니다: ${dbError.message}` }
   }
-
-  console.log('DB insert successful:', attachment)
 
   // Signed URL 생성
   const { data: urlData } = await supabase.storage
@@ -167,9 +150,7 @@ export async function deleteAttachment(attachmentId: string): Promise<{ success?
     .from('attachments')
     .remove([attachment.storage_path])
 
-  if (storageError) {
-    console.error('Storage delete error:', storageError)
-  }
+  // Storage 삭제 실패는 무시 (DB 삭제 진행)
 
   // DB에서 레코드 삭제
   const { error: dbError } = await supabase
