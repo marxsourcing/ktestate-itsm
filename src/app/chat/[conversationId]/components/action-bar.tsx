@@ -63,6 +63,12 @@ export function ActionBar({ conversationId }: ActionBarProps) {
   }
 
   function mapTypeToSrType(type?: string): string {
+    // 새 유형 코드 (feature_add, feature_improve, bug_fix, other) 그대로 사용
+    const validTypes = ['feature_add', 'feature_improve', 'bug_fix', 'other']
+    if (type && validTypes.includes(type)) {
+      return type
+    }
+    // 구 유형 코드 호환성 유지
     switch (type) {
       case 'feature':
         return 'feature_add'

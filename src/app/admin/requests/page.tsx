@@ -11,6 +11,20 @@ import { Badge } from '@/components/ui/badge'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 
+const TYPE_LABELS: Record<string, string> = {
+  feature_add: '기능추가',
+  feature_improve: '기능개선',
+  bug_fix: '버그수정',
+  other: '기타',
+}
+
+const PRIORITY_LABELS: Record<string, string> = {
+  urgent: '긴급',
+  high: '높음',
+  medium: '보통',
+  low: '낮음',
+}
+
 export default async function AdminRequestsPage() {
   const supabase = await createClient()
   
@@ -89,9 +103,9 @@ export default async function AdminRequestsPage() {
                   <TableCell>
                     {request.requester?.full_name || request.requester?.email}
                   </TableCell>
-                  <TableCell>{request.type}</TableCell>
+                  <TableCell>{TYPE_LABELS[request.type] || request.type}</TableCell>
                   <TableCell>
-                    <Badge variant="outline">{request.priority}</Badge>
+                    <Badge variant="outline">{PRIORITY_LABELS[request.priority] || request.priority}</Badge>
                   </TableCell>
                   <TableCell>
                     {new Date(request.created_at).toLocaleDateString()}
