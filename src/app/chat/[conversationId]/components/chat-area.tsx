@@ -65,19 +65,14 @@ export function ChatArea({ conversationId, initialMessages, conversationStatus }
 
     setIsLoading(true)
 
-    console.log('sendMessage called, attachments:', attachments)
-
     try {
       // 사용자 메시지의 metadata (첨부파일 포함)
       const userMetadata = attachments && attachments.length > 0
         ? { attachments }
         : undefined
 
-      console.log('userMetadata:', userMetadata)
-
       // 사용자 메시지 추가
       const userResult = await addMessage(conversationId, 'user', content, userMetadata)
-      console.log('addMessage result:', userResult)
       if (userResult.message) {
         setMessages((prev) => [...prev, userResult.message as Message])
       }
