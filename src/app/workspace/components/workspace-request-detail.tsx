@@ -126,7 +126,7 @@ export function WorkspaceRequestDetail({ request, currentUserId }: WorkspaceRequ
   useEffect(() => {
     const loadConversation = async () => {
       const supabase = createClient()
-      
+
       // 해당 요청에 연결된 담당자 내부 대화만 조회 (type: 'manager')
       // 요청자의 원본 AI 채팅(type: 'requester')은 조회하지 않음
       const { data: conv } = await supabase
@@ -135,7 +135,7 @@ export function WorkspaceRequestDetail({ request, currentUserId }: WorkspaceRequ
         .eq('request_id', request.id)
         .eq('type', 'manager')  // 담당자 내부 채팅만
         .order('created_at', { ascending: true, referencedTable: 'messages' })
-        .single()
+        .maybeSingle()  // 결과가 없어도 에러 발생하지 않음
 
       if (conv) {
         setConversationId(conv.id)

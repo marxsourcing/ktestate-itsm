@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -255,7 +255,12 @@ function RequestItem({
   completed?: boolean
 }) {
   const config = PRIORITY_CONFIG[priority] || PRIORITY_CONFIG.medium
-  const timeAgo = getTimeAgo(request.created_at)
+  const [timeAgo, setTimeAgo] = useState<string>('')
+
+  // 클라이언트에서만 시간 계산 (Hydration mismatch 방지)
+  useEffect(() => {
+    setTimeAgo(getTimeAgo(request.created_at))
+  }, [request.created_at])
 
   return (
     <button

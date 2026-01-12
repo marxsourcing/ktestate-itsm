@@ -29,17 +29,20 @@ export async function assignRequest(requestId: string, managerId: string) {
   }
 
   // 배정 및 상태 변경
+  const newStatus = request.status === 'requested' ? 'reviewing' : request.status
+  console.log('Assigning request:', { requestId, managerId, currentStatus: request.status, newStatus })
+
   const { error } = await supabase
     .from('service_requests')
-    .update({ 
+    .update({
       manager_id: managerId,
-      status: request.status === 'requested' ? 'reviewing' : request.status
+      status: newStatus
     })
     .eq('id', requestId)
 
   if (error) {
     console.error('배정 오류:', error)
-    return { error: '배정 중 오류가 발생했습니다.' }
+    return { error: `배정 오류: ${JSON.stringify(error)}` }
   }
 
   // 히스토리 기록
