@@ -2,9 +2,10 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/server'
-import { MessageSquare, LayoutGrid, Briefcase, Settings, BarChart3 } from 'lucide-react'
+import { MessageSquare, LayoutGrid, Briefcase, Settings, BarChart3, ChevronDown, MessagesSquare, Database, Users } from 'lucide-react'
 import { NotificationBell } from '@/components/notifications/notification-bell'
 import { ProfileDropdown } from './profile-dropdown'
+import { AdminMenu } from './admin-menu'
 
 export async function Header() {
   const supabase = await createClient()
@@ -57,9 +58,7 @@ export async function Header() {
                 <NavLink href="/dashboard" icon={<BarChart3 className="size-4" />}>
                   대시보드
                 </NavLink>
-                <NavLink href="/admin/systems" icon={<Settings className="size-4" />}>
-                  관리
-                </NavLink>
+                <AdminMenu />
               </>
             )}
           </nav>
