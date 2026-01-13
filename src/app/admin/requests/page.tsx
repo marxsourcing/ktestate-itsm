@@ -14,7 +14,8 @@ export default async function AdminRequestsPage() {
     .eq('id', user.id)
     .single()
 
-  if (profile?.role !== 'admin' && profile?.role !== 'manager') {
+  // 관리자만 접근 가능 (요구사항: 관리 페이지는 관리자 전용)
+  if (profile?.role !== 'admin') {
     redirect('/')
   }
 

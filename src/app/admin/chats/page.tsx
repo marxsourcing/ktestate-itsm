@@ -14,7 +14,8 @@ export default async function AdminChatsPage() {
     .eq('id', user.id)
     .single()
 
-  if (profile?.role !== 'admin' && profile?.role !== 'manager') {
+  // 관리자만 접근 가능 (요구사항: 전체 채팅 내역 조회는 관리자 전용)
+  if (profile?.role !== 'admin') {
     redirect('/')
   }
 

@@ -6,6 +6,7 @@ import { RequestsChart } from './components/requests-chart'
 import { StatusDistribution } from './components/status-distribution'
 import { RecentRequests } from './components/recent-requests'
 import { TopSystems } from './components/top-systems'
+import { ManagerStats } from './components/manager-stats'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,8 +25,8 @@ export default async function DashboardPage() {
     .eq('id', user.id)
     .single()
 
-  // 관리자 또는 담당자만 접근 가능
-  if (!profile || profile.role === 'requester') {
+  // 관리자만 접근 가능 (요구사항: 대시보드는 관리자 전용)
+  if (!profile || profile.role !== 'admin') {
     redirect('/chat')
   }
 
@@ -65,6 +66,13 @@ export default async function DashboardPage() {
           </Suspense>
           <Suspense fallback={<ChartLoading title="시스템별 현황" />}>
             <TopSystems />
+          </Suspense>
+        </div>
+
+        {/* Manager Stats */}
+        <div className="mt-8">
+          <Suspense fallback={<ChartLoading title="담당자별 현황" />}>
+            <ManagerStats />
           </Suspense>
         </div>
       </main>
