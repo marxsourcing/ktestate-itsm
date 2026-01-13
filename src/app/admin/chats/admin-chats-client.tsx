@@ -13,12 +13,13 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { Search, MessageSquare, CheckCircle2, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react'
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Search, MessageSquare, CheckCircle2, ExternalLink, ChevronLeft, ChevronRight, Download, Loader2, X } from 'lucide-react'
 import Link from 'next/link'
 import { ChatDetailModal } from '@/components/admin/chat-detail-modal'
 
@@ -41,26 +42,61 @@ interface Conversation {
   } | null
 }
 
+interface User {
+  id: string
+  full_name: string | null
+  email: string
+}
+
 interface AdminChatsClientProps {
   conversations: Conversation[]
+  users: User[]
 }
 
 const PAGE_SIZE = 20
 
-export function AdminChatsClient({ conversations }: AdminChatsClientProps) {
+const STATUS_OPTIONS = [
+  { value: 'all', label: '전체 상태' },
+  { value: 'active', label: '진행중' },
+  { value: 'confirmed', label: '확정' },
+  { value: 'archived', label: '보관' },
+]
+
+export function AdminChatsClient({ conversations, users }: AdminChatsClientProps) {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
+  const [isExporting, setIsExporting] = useState(false)
+
+  // 필터 상태
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [userFilter, setUserFilter] = useState('all')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
 
   const filteredConversations = conversations.filter((conv) => {
+    // 키워드 검색
     const searchLower = searchTerm.toLowerCase()
-    return (
+    const matchesSearch =
+      !searchTerm ||
       conv.title.toLowerCase().includes(searchLower) ||
       conv.user?.full_name?.toLowerCase().includes(searchLower) ||
       conv.user?.email?.toLowerCase().includes(searchLower) ||
       conv.request?.title?.toLowerCase().includes(searchLower)
-    )
+
+    // 상태 필터
+    const matchesStatus = statusFilter === 'all' || conv.status === statusFilter
+
+    // 사용자 필터
+    const matchesUser = userFilter === 'all' || conv.user?.id === userFilter
+
+    // 기간 필터
+    const convDate = new Date(conv.created_at)
+    const matchesStartDate = !startDate || convDate >= new Date(startDate)
+    const matchesEndDate = !endDate || convDate <= new Date(endDate + 'T23:59:59')
+
+    return matchesSearch && matchesStatus && matchesUser && matchesStartDate && matchesEndDate
   })
 
   // 페이지네이션 계산
@@ -68,11 +104,26 @@ export function AdminChatsClient({ conversations }: AdminChatsClientProps) {
   const startIndex = (currentPage - 1) * PAGE_SIZE
   const paginatedConversations = filteredConversations.slice(startIndex, startIndex + PAGE_SIZE)
 
-  // 검색 시 첫 페이지로 이동
+  // 필터 변경 시 첫 페이지로 이동
+  function handleFilterChange() {
+    setCurrentPage(1)
+  }
+
   function handleSearchChange(value: string) {
     setSearchTerm(value)
     setCurrentPage(1)
   }
+
+  function clearFilters() {
+    setSearchTerm('')
+    setStatusFilter('all')
+    setUserFilter('all')
+    setStartDate('')
+    setEndDate('')
+    setCurrentPage(1)
+  }
+
+  const hasActiveFilters = searchTerm || statusFilter !== 'all' || userFilter !== 'all' || startDate || endDate
 
   function formatDate(dateString: string) {
     return new Date(dateString).toLocaleString('ko-KR', {
@@ -102,21 +153,146 @@ export function AdminChatsClient({ conversations }: AdminChatsClientProps) {
     setIsModalOpen(true)
   }
 
+  async function handleExport() {
+    setIsExporting(true)
+    try {
+      // 필터 파라미터 추가
+      const params = new URLSearchParams({ type: 'chats' })
+      if (statusFilter !== 'all') params.append('status', statusFilter)
+      if (userFilter !== 'all') params.append('userId', userFilter)
+      if (startDate) params.append('startDate', startDate)
+      if (endDate) params.append('endDate', endDate)
+
+      const response = await fetch(`/api/admin/export?${params.toString()}`)
+      if (!response.ok) throw new Error('Export failed')
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `채팅내역_${new Date().toISOString().split('T')[0].replace(/-/g, '')}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (error) {
+      console.error('Export error:', error)
+      alert('내보내기에 실패했습니다.')
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
   return (
     <div className="space-y-4">
-      {/* Search */}
-      <div className="flex items-center gap-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
-          <Input
-            placeholder="제목, 사용자, 요청으로 검색..."
-            value={searchTerm}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-        <div className="text-sm text-gray-500">
-          총 {filteredConversations.length}건
+      {/* Filters */}
+      <div className="bg-white rounded-lg border p-4">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* 키워드 검색 */}
+          <div className="relative w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
+            <Input
+              placeholder="제목, 사용자, 요청 검색..."
+              value={searchTerm}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              className="pl-10 h-9"
+            />
+          </div>
+
+          {/* 상태 필터 */}
+          <Select
+            value={statusFilter}
+            onValueChange={(value) => {
+              setStatusFilter(value)
+              handleFilterChange()
+            }}
+          >
+            <SelectTrigger className="w-[120px] h-9">
+              <SelectValue placeholder="상태" />
+            </SelectTrigger>
+            <SelectContent>
+              {STATUS_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* 사용자 필터 */}
+          <Select
+            value={userFilter}
+            onValueChange={(value) => {
+              setUserFilter(value)
+              handleFilterChange()
+            }}
+          >
+            <SelectTrigger className="w-[140px] h-9">
+              <SelectValue placeholder="사용자" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체 사용자</SelectItem>
+              {users.map((user) => (
+                <SelectItem key={user.id} value={user.id}>
+                  {user.full_name || user.email}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* 기간 필터 */}
+          <div className="flex items-center gap-1">
+            <Input
+              type="date"
+              value={startDate}
+              onChange={(e) => {
+                setStartDate(e.target.value)
+                handleFilterChange()
+              }}
+              className="w-[130px] h-9"
+            />
+            <span className="text-gray-400">~</span>
+            <Input
+              type="date"
+              value={endDate}
+              onChange={(e) => {
+                setEndDate(e.target.value)
+                handleFilterChange()
+              }}
+              className="w-[130px] h-9"
+            />
+          </div>
+
+          {/* 초기화 버튼 */}
+          {hasActiveFilters && (
+            <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 px-2 text-gray-500">
+              <X className="size-4" />
+            </Button>
+          )}
+
+          {/* 스페이서 */}
+          <div className="flex-1" />
+
+          {/* 결과 건수 */}
+          <span className="text-sm text-gray-500">
+            총 {filteredConversations.length}건
+          </span>
+
+          {/* Excel 내보내기 */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExport}
+            disabled={isExporting || filteredConversations.length === 0}
+            className="h-9"
+          >
+            {isExporting ? (
+              <Loader2 className="size-4 animate-spin mr-1.5" />
+            ) : (
+              <Download className="size-4 mr-1.5" />
+            )}
+            Excel
+          </Button>
         </div>
       </div>
 
@@ -184,7 +360,7 @@ export function AdminChatsClient({ conversations }: AdminChatsClientProps) {
             ) : (
               <TableRow>
                 <TableCell colSpan={6} className="h-24 text-center text-gray-500">
-                  {searchTerm ? '검색 결과가 없습니다.' : '채팅 내역이 없습니다.'}
+                  {hasActiveFilters ? '검색 결과가 없습니다.' : '채팅 내역이 없습니다.'}
                 </TableCell>
               </TableRow>
             )}
@@ -211,7 +387,6 @@ export function AdminChatsClient({ conversations }: AdminChatsClientProps) {
             <div className="flex items-center gap-1">
               {Array.from({ length: totalPages }, (_, i) => i + 1)
                 .filter((page) => {
-                  // 현재 페이지 주변 2페이지만 표시
                   return Math.abs(page - currentPage) <= 2 || page === 1 || page === totalPages
                 })
                 .map((page, idx, arr) => (

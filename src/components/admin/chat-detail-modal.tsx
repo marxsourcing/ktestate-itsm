@@ -9,7 +9,8 @@ import {
 } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Loader2, User, Bot, ExternalLink, Image as ImageIcon } from 'lucide-react'
+import { Loader2, User, Bot, ExternalLink, Image as ImageIcon, Download } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 
@@ -56,6 +57,7 @@ export function ChatDetailModal({
 }: ChatDetailModalProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
 
   useEffect(() => {
     if (open && conversationId) {
@@ -99,28 +101,70 @@ export function ChatDetailModal({
     return labels[status] || status
   }
 
+  async function handleExport() {
+    setIsExporting(true)
+    try {
+      const response = await fetch(`/api/admin/export?type=messages&conversationId=${conversationId}`)
+      if (!response.ok) throw new Error('Export failed')
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `채팅상세_${new Date().toISOString().split('T')[0].replace(/-/g, '')}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (error) {
+      console.error('Export error:', error)
+      alert('내보내기에 실패했습니다.')
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl h-[80vh] flex flex-col">
-        <DialogHeader className="flex-shrink-0">
-          <DialogTitle className="flex items-center gap-2">
-            채팅 내역: {title}
-          </DialogTitle>
-          <div className="flex items-center gap-4 text-sm text-gray-500 pt-2">
+      <DialogContent className="w-[95vw] max-w-4xl h-[85vh] flex flex-col p-4 sm:p-6">
+        <DialogHeader className="flex-shrink-0 space-y-2 overflow-hidden">
+          {/* 제목 + 버튼 영역 */}
+          <div className="flex items-start justify-between gap-2">
+            <DialogTitle className="text-base sm:text-lg leading-tight flex-1 min-w-0">
+              채팅 내역: {title}
+            </DialogTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExport}
+              disabled={isExporting || messages.length === 0}
+              className="shrink-0"
+            >
+              {isExporting ? (
+                <Loader2 className="size-4 animate-spin mr-1" />
+              ) : (
+                <Download className="size-4 mr-1" />
+              )}
+              <span className="hidden sm:inline">Excel 내보내기</span>
+              <span className="sm:hidden">내보내기</span>
+            </Button>
+          </div>
+          {/* 메타 정보 영역 */}
+          <div className="text-sm text-gray-500 space-y-1">
             <div>
               <span className="font-medium">사용자:</span>{' '}
               {user?.full_name || user?.email || '-'}
             </div>
             {request && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-medium">연결된 요청:</span>
                 <Link
                   href={`/requests/${request.id}`}
-                  className="text-blue-600 hover:underline flex items-center gap-1"
+                  className="text-blue-600 hover:underline inline-flex items-center gap-1 max-w-full"
                   onClick={() => onOpenChange(false)}
                 >
-                  {request.title}
-                  <ExternalLink className="size-3" />
+                  <span className="truncate max-w-[150px] sm:max-w-[250px]">{request.title}</span>
+                  <ExternalLink className="size-3 shrink-0" />
                 </Link>
                 <Badge variant="outline" className="text-xs">
                   {getStatusLabel(request.status)}

@@ -27,7 +27,12 @@ export default async function AdminChatsPage() {
       request:service_requests(id, title, status)
     `)
     .order('updated_at', { ascending: false })
-    .limit(100)
+
+  // 사용자 목록 조회 (필터용)
+  const { data: users } = await supabase
+    .from('profiles')
+    .select('id, full_name, email')
+    .order('full_name', { ascending: true })
 
   return (
     <div className="container mx-auto py-10 px-4">
@@ -36,7 +41,7 @@ export default async function AdminChatsPage() {
         <p className="text-muted-foreground">모든 사용자의 AI 채팅 내역을 조회하고 관리합니다. (감사/증적용)</p>
       </div>
 
-      <AdminChatsClient conversations={conversations || []} />
+      <AdminChatsClient conversations={conversations || []} users={users || []} />
     </div>
   )
 }
