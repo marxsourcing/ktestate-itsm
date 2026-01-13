@@ -74,36 +74,41 @@ export function ChatMessages({ messages, isLoading, onRequirementUpdate }: ChatM
                 message.role === 'user' ? 'order-1' : ''
               )}
             >
-              <div
-                className={cn(
-                  'rounded-2xl px-4 py-3 text-[15px] leading-relaxed',
-                  message.role === 'user'
-                    ? 'bg-rose-500 text-white'
-                    : 'bg-white text-gray-800 border border-gray-200 shadow-sm'
-                )}
-              >
-                <div className={cn(
-                  'markdown-content',
-                  message.role === 'user' ? 'markdown-user' : 'markdown-assistant'
-                )}>
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {message.content}
-                  </ReactMarkdown>
+              {/* 메시지 버블 - content가 있거나 첨부파일이 있을 때만 표시 */}
+              {(message.content.trim() || (message.metadata?.attachments && message.metadata.attachments.length > 0)) && (
+                <div
+                  className={cn(
+                    'rounded-2xl px-4 py-3 text-[15px] leading-relaxed',
+                    message.role === 'user'
+                      ? 'bg-rose-500 text-white'
+                      : 'bg-white text-gray-800 border border-gray-200 shadow-sm'
+                  )}
+                >
+                  {message.content.trim() && (
+                    <div className={cn(
+                      'markdown-content',
+                      message.role === 'user' ? 'markdown-user' : 'markdown-assistant'
+                    )}>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {message.content}
+                      </ReactMarkdown>
+                    </div>
+                  )}
+
+                  {/* 첨부파일 표시 */}
+                  {message.metadata?.attachments && message.metadata.attachments.length > 0 && (
+                    <div className={cn(message.content.trim() ? 'mt-3' : '', 'space-y-2')}>
+                      {message.metadata.attachments.map((attachment) => (
+                        <AttachmentPreview
+                          key={attachment.id}
+                          attachment={attachment}
+                          isUserMessage={message.role === 'user'}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
-                
-                {/* 첨부파일 표시 */}
-                {message.metadata?.attachments && message.metadata.attachments.length > 0 && (
-                  <div className="mt-3 space-y-2">
-                    {message.metadata.attachments.map((attachment) => (
-                      <AttachmentPreview 
-                        key={attachment.id} 
-                        attachment={attachment}
-                        isUserMessage={message.role === 'user'}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
+              )}
 
               {/* Requirement Card */}
               {message.metadata?.requirementCard && (
