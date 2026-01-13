@@ -224,7 +224,7 @@ export async function getRecentRequests(): Promise<{ data?: RecentRequestData[];
       requester:profiles!service_requests_requester_id_fkey(full_name)
     `)
     .order('created_at', { ascending: false })
-    .limit(10)
+    .limit(5)
 
   if (error) {
     return { error: error.message }
@@ -333,5 +333,112 @@ export async function getSystemStats(): Promise<{ data?: SystemStatsData[]; erro
   result.sort((a, b) => b.total - a.total)
 
   return { data: result.slice(0, 5) }
+}
+
+export interface ManagerStatsData {
+  manager_id: string
+  manager_name: string
+  manager_email: string
+  total: number
+  pending: number
+  processing: number
+  completed: number
+  rejected: number
+  avg_days: number
+}
+
+export async function getManagerStats(): Promise<{ data?: ManagerStatsData[]; error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: '로그인이 필요합니다.' }
+  }
+
+  // 담당자 역할의 사용자 목록 조회
+  const { data: managers } = await supabase
+    .from('profiles')
+    .select('id, full_name, email')
+    .in('role', ['manager', 'admin'])
+
+  if (!managers) {
+    return { data: [] }
+  }
+
+  const result: ManagerStatsData[] = []
+
+  for (const manager of managers) {
+    // 해당 담당자의 전체 요청 수
+    const { count: total } = await supabase
+      .from('service_requests')
+      .select('*', { count: 'exact', head: true })
+      .eq('manager_id', manager.id)
+
+    if (!total || total === 0) continue
+
+    // 대기 중 (requested, reviewing)
+    const { count: pending } = await supabase
+      .from('service_requests')
+      .select('*', { count: 'exact', head: true })
+      .eq('manager_id', manager.id)
+      .in('status', ['requested', 'reviewing'])
+
+    // 처리 중
+    const { count: processing } = await supabase
+      .from('service_requests')
+      .select('*', { count: 'exact', head: true })
+      .eq('manager_id', manager.id)
+      .eq('status', 'processing')
+
+    // 완료
+    const { count: completed } = await supabase
+      .from('service_requests')
+      .select('*', { count: 'exact', head: true })
+      .eq('manager_id', manager.id)
+      .eq('status', 'completed')
+
+    // 반려
+    const { count: rejected } = await supabase
+      .from('service_requests')
+      .select('*', { count: 'exact', head: true })
+      .eq('manager_id', manager.id)
+      .eq('status', 'rejected')
+
+    // 평균 처리일 계산 (완료된 요청만)
+    const { data: completedData } = await supabase
+      .from('service_requests')
+      .select('created_at, completed_at')
+      .eq('manager_id', manager.id)
+      .eq('status', 'completed')
+      .not('completed_at', 'is', null)
+
+    let avgDays = 0
+    if (completedData && completedData.length > 0) {
+      const totalDays = completedData.reduce((sum, req) => {
+        const created = new Date(req.created_at)
+        const completedAt = new Date(req.completed_at!)
+        const days = Math.ceil((completedAt.getTime() - created.getTime()) / (1000 * 60 * 60 * 24))
+        return sum + days
+      }, 0)
+      avgDays = Math.round((totalDays / completedData.length) * 10) / 10
+    }
+
+    result.push({
+      manager_id: manager.id,
+      manager_name: manager.full_name || '이름 없음',
+      manager_email: manager.email,
+      total: total || 0,
+      pending: pending || 0,
+      processing: processing || 0,
+      completed: completed || 0,
+      rejected: rejected || 0,
+      avg_days: avgDays
+    })
+  }
+
+  // 배정된 요청 수 기준 정렬
+  result.sort((a, b) => b.total - a.total)
+
+  return { data: result }
 }
 

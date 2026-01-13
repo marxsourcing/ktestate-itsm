@@ -2,9 +2,10 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/server'
-import { MessageSquare, LayoutGrid, Briefcase, Settings, BarChart3 } from 'lucide-react'
+import { MessageSquare, LayoutGrid, Briefcase, Settings, BarChart3, ChevronDown, MessagesSquare, Database, Users } from 'lucide-react'
 import { NotificationBell } from '@/components/notifications/notification-bell'
 import { ProfileDropdown } from './profile-dropdown'
+import { AdminMenu } from './admin-menu'
 
 export async function Header() {
   const supabase = await createClient()
@@ -20,20 +21,21 @@ export async function Header() {
     profile = data
   }
 
-  const isManager = profile?.role === 'admin' || profile?.role === 'manager'
+  const isManagerOrAdmin = profile?.role === 'admin' || profile?.role === 'manager'
+  const isAdmin = profile?.role === 'admin'
 
   return (
     <header className="sticky top-0 z-50 w-full h-14 border-b border-gray-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
       <div className="flex h-full items-center justify-between px-4">
         {/* Logo */}
-        <Link 
-          href={user ? '/chat' : '/'} 
+        <Link
+          href={user ? '/chat' : '/'}
           className="flex items-center gap-2.5 font-semibold text-gray-900 hover:opacity-80 transition-opacity"
         >
-          <Image 
-            src="/img/kt_logo.png" 
-            alt="KT Logo" 
-            width={32} 
+          <Image
+            src="/img/kt_logo.png"
+            alt="KT Logo"
+            width={32}
             height={32}
             className="object-contain"
           />
@@ -49,17 +51,19 @@ export async function Header() {
             <NavLink href="/requests" icon={<LayoutGrid className="size-4" />}>
               요청 현황
             </NavLink>
-            {isManager && (
+            {/* 담당자, 관리자: 워크스페이스 접근 */}
+            {isManagerOrAdmin && (
+              <NavLink href="/workspace" icon={<Briefcase className="size-4" />}>
+                워크스페이스
+              </NavLink>
+            )}
+            {/* 관리자 전용: 대시보드, 관리 메뉴 */}
+            {isAdmin && (
               <>
-                <NavLink href="/workspace" icon={<Briefcase className="size-4" />}>
-                  워크스페이스
-                </NavLink>
                 <NavLink href="/dashboard" icon={<BarChart3 className="size-4" />}>
                   대시보드
                 </NavLink>
-                <NavLink href="/admin/systems" icon={<Settings className="size-4" />}>
-                  관리
-                </NavLink>
+                <AdminMenu />
               </>
             )}
           </nav>
