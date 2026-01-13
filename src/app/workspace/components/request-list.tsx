@@ -79,15 +79,22 @@ const TYPE_LABELS: Record<string, string> = {
   other: '기타',
 }
 
-export function RequestList({ 
-  myRequests, 
-  unassignedRequests, 
+export function RequestList({
+  myRequests,
+  unassignedRequests,
   recentCompletedRequests,
-  currentUserId 
+  currentUserId
 }: RequestListProps) {
   const [selectedRequest, setSelectedRequest] = useState<AssignedRequest | null>(
     myRequests[0] || unassignedRequests[0] || null
   )
+
+  // 선택된 요청의 상태 업데이트 핸들러
+  const handleRequestStatusChange = (requestId: string, newStatus: string) => {
+    if (selectedRequest?.id === requestId) {
+      setSelectedRequest(prev => prev ? { ...prev, status: newStatus } : null)
+    }
+  }
 
   // 우선순위별 그룹핑
   const groupByPriority = (requests: AssignedRequest[]) => {
@@ -227,9 +234,10 @@ export function RequestList({
       {/* Right: Detail + AI Chat */}
       <div className="flex-1 overflow-hidden">
         {selectedRequest ? (
-          <WorkspaceRequestDetail 
+          <WorkspaceRequestDetail
             request={selectedRequest}
             currentUserId={currentUserId}
+            onStatusChange={handleRequestStatusChange}
           />
         ) : (
           <EmptyState />

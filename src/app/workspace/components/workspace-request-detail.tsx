@@ -1,32 +1,25 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { 
-  User, 
-  Calendar, 
-  Server, 
+import {
+  User,
+  Calendar,
+  Server,
   Tag,
-  Clock,
-  Bot,
-  Sparkles,
-  ArrowRight,
   CheckCircle2,
   Play,
-  Send,
-  MessageSquare,
   FileText,
   AlertTriangle,
-  Link as LinkIcon
+  Link as LinkIcon,
+  Eye
 } from 'lucide-react'
+import { ManagerAiChat } from './manager-ai-chat'
+import { OriginalChatModal } from './original-chat-modal'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ChatMessages, Message } from '@/components/chat/chat-messages'
-import { ChatInput } from '@/components/chat/chat-input'
-import { createClient } from '@/lib/supabase/client'
-import { addMessage, createConversation } from '@/app/chat/actions'
 import { assignRequest, updateRequestStatus } from '../actions'
 import { toast } from 'sonner'
 
@@ -46,6 +39,7 @@ interface AssignedRequest {
 interface WorkspaceRequestDetailProps {
   request: AssignedRequest
   currentUserId: string
+  onStatusChange?: (requestId: string, newStatus: string) => void
 }
 
 const PRIORITY_CONFIG = {
@@ -70,193 +64,16 @@ const TYPE_LABELS: Record<string, string> = {
   other: '기타',
 }
 
-// AI 협업 제안 옵션
-const AI_WORK_SUGGESTIONS = [
-  {
-    icon: '🔍',
-    title: '유사 사례 검색',
-    description: '과거 비슷한 요청 찾기',
-    prompt: '이 요청과 유사한 과거 사례가 있나요? 어떻게 처리되었는지 알려주세요.',
-  },
-  {
-    icon: '📝',
-    title: '답변 초안 작성',
-    description: '요청자에게 보낼 답변',
-    prompt: '이 요청에 대해 요청자에게 보낼 답변 초안을 작성해주세요. 전문적이면서도 친근한 어조로 부탁드립니다.',
-  },
-  {
-    icon: '📋',
-    title: '처리 계획 수립',
-    description: '단계별 처리 방법',
-    prompt: '이 요청을 처리하기 위한 단계별 계획을 세워주세요. 예상 소요 시간도 포함해주세요.',
-  },
-  {
-    icon: '⚠️',
-    title: '위험 요소 분석',
-    description: '주의해야 할 사항',
-    prompt: '이 요청을 처리할 때 주의해야 할 위험 요소나 고려사항이 있나요?',
-  },
-  {
-    icon: '📚',
-    title: '관련 문서 추천',
-    description: '참고할 만한 가이드',
-    prompt: '이 요청과 관련된 내부 가이드나 문서가 있다면 추천해주세요.',
-  },
-  {
-    icon: '💡',
-    title: '최적의 해결책',
-    description: 'AI 추천 솔루션',
-    prompt: '이 요청에 대한 최적의 해결책을 추천해주세요. 장단점도 함께 설명해주세요.',
-  },
-]
-
-export function WorkspaceRequestDetail({ request, currentUserId }: WorkspaceRequestDetailProps) {
+export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange }: WorkspaceRequestDetailProps) {
   const router = useRouter()
-  const [conversationId, setConversationId] = useState<string | null>(null)
-  const [messages, setMessages] = useState<Message[]>([])
-  const [isLoading, setIsLoading] = useState(false)
   const [isAssigning, setIsAssigning] = useState(false)
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
+  const [isOriginalChatOpen, setIsOriginalChatOpen] = useState(false)
+  const [hasOriginalChat, setHasOriginalChat] = useState<boolean | null>(null)
 
   const priorityConfig = PRIORITY_CONFIG[request.priority as keyof typeof PRIORITY_CONFIG] || PRIORITY_CONFIG.medium
   const statusConfig = STATUS_CONFIG[request.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.requested
   const createdDate = new Date(request.created_at)
-
-  // 담당자 전용 대화 로드 (type: 'manager'인 것만)
-  useEffect(() => {
-    const loadConversation = async () => {
-      const supabase = createClient()
-
-      // 해당 요청에 연결된 담당자 내부 대화만 조회 (type: 'manager')
-      // 요청자의 원본 AI 채팅(type: 'requester')은 조회하지 않음
-      const { data: conv } = await supabase
-        .from('conversations')
-        .select('id, messages(*)')
-        .eq('request_id', request.id)
-        .eq('type', 'manager')  // 담당자 내부 채팅만
-        .order('created_at', { ascending: true, referencedTable: 'messages' })
-        .maybeSingle()  // 결과가 없어도 에러 발생하지 않음
-
-      if (conv) {
-        setConversationId(conv.id)
-        setMessages(conv.messages || [])
-      } else {
-        setConversationId(null)
-        setMessages([])
-      }
-    }
-
-    loadConversation()
-  }, [request.id])
-
-  // 실시간 메시지 구독
-  useEffect(() => {
-    if (!conversationId) return
-
-    const supabase = createClient()
-    const channel = supabase
-      .channel(`workspace-messages:${conversationId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `conversation_id=eq.${conversationId}`,
-        },
-        (payload) => {
-          const newMessage = payload.new as Message
-          setMessages((prev) => {
-            if (prev.some((m) => m.id === newMessage.id)) {
-              return prev
-            }
-            return [...prev, newMessage]
-          })
-        }
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [conversationId])
-
-  const sendMessage = useCallback(async (content: string) => {
-    setIsLoading(true)
-
-    try {
-      let activeConversationId = conversationId
-      
-      // 대화가 없으면 담당자 전용 내부 대화로 새로 생성 (type: 'manager')
-      if (!activeConversationId) {
-        const result = await createConversation(
-          `[내부처리] ${request.title}`, 
-          request.id, 
-          'manager'  // 담당자 내부 채팅으로 생성
-        )
-        if (result.error || !result.conversation) {
-          throw new Error(result.error || '대화 생성 실패')
-        }
-        activeConversationId = result.conversation.id
-        setConversationId(activeConversationId)
-      }
-
-      // 사용자 메시지 추가
-      const userResult = await addMessage(activeConversationId!, 'user', content)
-      if (userResult.message) {
-        setMessages((prev) => [...prev, userResult.message as Message])
-      }
-
-      // AI 응답 요청 (요청 컨텍스트 + 담당자 모드)
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          conversationId: activeConversationId,
-          message: content,
-          messages: [...messages, { role: 'user', content }],
-          context: {
-            type: 'manager_workspace',
-            requestId: request.id,
-            requestTitle: request.title,
-            requestDescription: request.description,
-            requestPriority: request.priority,
-            requestType: request.type,
-            requesterName: request.requester?.full_name || request.requester?.email,
-          },
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error('AI 응답 실패')
-      }
-
-      const aiResponse = await response.json()
-      
-      // AI 응답 메시지 추가
-      const aiResult = await addMessage(
-        activeConversationId!,
-        'assistant',
-        aiResponse.content,
-        aiResponse.metadata
-      )
-
-      if (aiResult.message) {
-        setMessages((prev) => [...prev, aiResult.message as Message])
-      }
-    } catch (error) {
-      console.error('메시지 전송 실패:', error)
-      const errorMessage: Message = {
-        id: `error-${Date.now()}`,
-        role: 'assistant',
-        content: '죄송합니다. 일시적인 오류가 발생했습니다. 다시 시도해주세요.',
-        created_at: new Date().toISOString(),
-      }
-      setMessages((prev) => [...prev, errorMessage])
-    } finally {
-      setIsLoading(false)
-    }
-  }, [conversationId, messages, request])
 
   const handleAssign = async () => {
     setIsAssigning(true)
@@ -266,6 +83,8 @@ export function WorkspaceRequestDetail({ request, currentUserId }: WorkspaceRequ
         toast.error(result.error)
       } else {
         toast.success('요청이 배정되었습니다!')
+        // 로컬 상태 즉시 업데이트
+        onStatusChange?.(request.id, 'reviewing')
         router.refresh()
       }
     } catch {
@@ -275,7 +94,7 @@ export function WorkspaceRequestDetail({ request, currentUserId }: WorkspaceRequ
     }
   }
 
-  const handleStatusChange = async (newStatus: string) => {
+  const handleStatusUpdate = async (newStatus: string) => {
     setIsUpdatingStatus(true)
     try {
       const result = await updateRequestStatus(request.id, newStatus)
@@ -283,6 +102,8 @@ export function WorkspaceRequestDetail({ request, currentUserId }: WorkspaceRequ
         toast.error(result.error)
       } else {
         toast.success(`상태가 ${STATUS_CONFIG[newStatus as keyof typeof STATUS_CONFIG]?.label || newStatus}로 변경되었습니다.`)
+        // 로컬 상태 즉시 업데이트
+        onStatusChange?.(request.id, newStatus)
         router.refresh()
       }
     } catch {
@@ -368,7 +189,18 @@ export function WorkspaceRequestDetail({ request, currentUserId }: WorkspaceRequ
         {/* Quick Actions */}
         <div className="p-4 space-y-2">
           <h3 className="text-xs font-semibold text-gray-500 mb-3">빠른 작업</h3>
-          
+
+          {/* 원본 채팅 보기 버튼 */}
+          <Button
+            variant="outline"
+            onClick={() => setIsOriginalChatOpen(true)}
+            disabled={hasOriginalChat === false}
+            className="w-full gap-2 text-blue-600 border-blue-200 hover:bg-blue-50 hover:border-blue-300 disabled:text-gray-400 disabled:border-gray-200 disabled:bg-gray-50"
+          >
+            <Eye className="size-4" />
+            {hasOriginalChat === false ? '원본 채팅 없음' : '요청자 원본 채팅 보기'}
+          </Button>
+
           {request.status === 'requested' && (
             <Button 
               onClick={handleAssign}
@@ -381,8 +213,8 @@ export function WorkspaceRequestDetail({ request, currentUserId }: WorkspaceRequ
           )}
           
           {request.status === 'reviewing' && (
-            <Button 
-              onClick={() => handleStatusChange('processing')}
+            <Button
+              onClick={() => handleStatusUpdate('processing')}
               disabled={isUpdatingStatus}
               className="w-full bg-violet-600 hover:bg-violet-700"
             >
@@ -390,10 +222,10 @@ export function WorkspaceRequestDetail({ request, currentUserId }: WorkspaceRequ
               {isUpdatingStatus ? '변경 중...' : '처리 시작'}
             </Button>
           )}
-          
+
           {request.status === 'processing' && (
-            <Button 
-              onClick={() => handleStatusChange('completed')}
+            <Button
+              onClick={() => handleStatusUpdate('completed')}
               disabled={isUpdatingStatus}
               className="w-full bg-emerald-600 hover:bg-emerald-700"
             >
@@ -403,9 +235,9 @@ export function WorkspaceRequestDetail({ request, currentUserId }: WorkspaceRequ
           )}
 
           {request.status !== 'completed' && request.status !== 'rejected' && (
-            <Button 
+            <Button
               variant="outline"
-              onClick={() => handleStatusChange('rejected')}
+              onClick={() => handleStatusUpdate('rejected')}
               disabled={isUpdatingStatus}
               className="w-full text-rose-600 border-rose-200 hover:bg-rose-50"
             >
@@ -416,88 +248,29 @@ export function WorkspaceRequestDetail({ request, currentUserId }: WorkspaceRequ
         </div>
       </div>
 
-      {/* AI Chat Panel */}
-      <div className="flex-1 flex flex-col overflow-hidden bg-gray-50">
-        {/* Chat Header */}
-        <div className="flex-shrink-0 px-4 py-3 bg-white border-b border-gray-200">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-sm">
-                <Bot className="size-4 text-white" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-900">AI 협업 어시스턴트</h3>
-                <p className="text-xs text-gray-500">요청 처리를 함께 도와드립니다</p>
-              </div>
-            </div>
-            <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-xs">
-              🔒 내부 전용
-            </Badge>
-          </div>
-        </div>
-
-        {/* Messages or Suggestions */}
-        {messages.length === 0 && !isLoading ? (
-          <div className="flex-1 overflow-y-auto p-6">
-            <div className="max-w-2xl mx-auto">
-              {/* Welcome */}
-              <div className="text-center mb-8">
-                <div className="inline-flex size-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-100 to-purple-100 mb-4">
-                  <Sparkles className="size-8 text-indigo-600" />
-                </div>
-                <h2 className="text-xl font-semibold text-gray-900 mb-2">
-                  이 요청을 함께 처리해볼까요?
-                </h2>
-                <p className="text-gray-500 text-sm">
-                  AI 어시스턴트가 요청 분석, 답변 작성, 해결책 제안을 도와드립니다.
-                </p>
-              </div>
-
-              {/* Suggestion Cards */}
-              <div className="grid grid-cols-2 gap-3">
-                {AI_WORK_SUGGESTIONS.map((suggestion, index) => (
-                  <button
-                    key={index}
-                    onClick={() => sendMessage(suggestion.prompt)}
-                    disabled={isLoading}
-                    className={cn(
-                      'p-4 rounded-xl border bg-white text-left transition-all group',
-                      'hover:border-indigo-300 hover:shadow-md hover:-translate-y-0.5',
-                      'disabled:opacity-50 disabled:cursor-not-allowed'
-                    )}
-                  >
-                    <div className="flex items-start gap-3">
-                      <span className="text-2xl">{suggestion.icon}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-gray-900 group-hover:text-indigo-600 transition-colors">
-                          {suggestion.title}
-                        </div>
-                        <div className="text-xs text-gray-500 mt-0.5">
-                          {suggestion.description}
-                        </div>
-                      </div>
-                      <ArrowRight className="size-4 text-gray-300 group-hover:text-indigo-400 group-hover:translate-x-1 transition-all" />
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <ChatMessages
-            messages={messages}
-            isLoading={isLoading}
-          />
-        )}
-
-        {/* Input */}
-        <ChatInput
-          onSend={sendMessage}
-          disabled={false}
-          isLoading={isLoading}
-          placeholder="AI에게 도움을 요청하세요... (유사 사례, 답변 초안 등)"
+      {/* AI Chat Panel - 새로운 분리된 담당자 채팅 컴포넌트 */}
+      <div className="flex-1 overflow-hidden">
+        <ManagerAiChat
+          requestId={request.id}
+          requestContext={{
+            title: request.title,
+            description: request.description,
+            type: request.type,
+            priority: request.priority,
+            requesterName: request.requester?.full_name || request.requester?.email,
+            systemName: request.system?.name
+          }}
         />
       </div>
+
+      {/* 원본 채팅 조회 모달 */}
+      <OriginalChatModal
+        requestId={request.id}
+        requesterName={request.requester?.full_name || request.requester?.email}
+        open={isOriginalChatOpen}
+        onOpenChange={setIsOriginalChatOpen}
+        onChatExistsChange={setHasOriginalChat}
+      />
     </div>
   )
 }

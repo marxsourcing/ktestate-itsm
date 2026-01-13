@@ -30,7 +30,6 @@ export async function assignRequest(requestId: string, managerId: string) {
 
   // 배정 및 상태 변경
   const newStatus = request.status === 'requested' ? 'reviewing' : request.status
-  console.log('Assigning request:', { requestId, managerId, currentStatus: request.status, newStatus })
 
   const { error } = await supabase
     .from('service_requests')
