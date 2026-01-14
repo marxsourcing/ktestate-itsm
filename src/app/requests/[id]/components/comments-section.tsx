@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { addComment } from '@/app/requests/actions'
 import { MessageSquare, Lock, Send } from 'lucide-react'
 import { toast } from 'sonner'
+import ReactMarkdown from 'react-markdown'
 
 interface Comment {
   id: string
@@ -75,7 +76,9 @@ export function CommentsSection({ requestId, comments, isManager }: CommentsSect
                   {new Date(comment.created_at).toLocaleString('ko-KR')}
                 </span>
               </div>
-              <p className="text-sm whitespace-pre-wrap">{comment.content}</p>
+              <div className="text-sm prose prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5">
+                <ReactMarkdown>{comment.content}</ReactMarkdown>
+              </div>
             </li>
           ))}
         </ul>
