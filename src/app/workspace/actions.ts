@@ -123,3 +123,90 @@ export async function updateRequestStatus(requestId: string, newStatus: string) 
   return { success: true }
 }
 
+// 사유와 함께 상태 변경 (완료/반려)
+export async function updateRequestStatusWithReason(
+  requestId: string,
+  newStatus: 'completed' | 'rejected',
+  reason: string
+) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: '로그인이 필요합니다.' }
+  }
+
+  // 반려 시 사유 필수
+  if (newStatus === 'rejected' && !reason.trim()) {
+    return { error: '반려 사유를 입력해주세요.' }
+  }
+
+  // 현재 상태 조회
+  const { data: request } = await supabase
+    .from('service_requests')
+    .select('status')
+    .eq('id', requestId)
+    .single()
+
+  if (!request) {
+    return { error: '요청을 찾을 수 없습니다.' }
+  }
+
+  const previousStatus = request.status
+
+  // 상태 업데이트
+  const updateData: { status: string; completed_at?: string } = { status: newStatus }
+  if (newStatus === 'completed') {
+    updateData.completed_at = new Date().toISOString()
+  }
+
+  const { error: updateError } = await supabase
+    .from('service_requests')
+    .update(updateData)
+    .eq('id', requestId)
+
+  if (updateError) {
+    console.error('상태 변경 오류:', updateError)
+    return { error: '상태 변경 중 오류가 발생했습니다.' }
+  }
+
+  // 히스토리 기록
+  const actionNote = newStatus === 'completed'
+    ? `처리 완료${reason ? `: ${reason}` : ''}`
+    : `반려: ${reason}`
+
+  await supabase.from('sr_history').insert({
+    request_id: requestId,
+    actor_id: user.id,
+    action: 'status_change',
+    previous_status: previousStatus,
+    new_status: newStatus,
+    note: actionNote,
+  })
+
+  // 댓글 자동 등록 (요청자에게 공개)
+  if (reason.trim()) {
+    const commentContent = newStatus === 'completed'
+      ? `✅ **처리 완료**\n\n${reason}`
+      : `❌ **요청 반려**\n\n${reason}`
+
+    const { error: commentError } = await supabase.from('sr_comments').insert({
+      request_id: requestId,
+      author_id: user.id,
+      content: commentContent,
+      is_internal: false, // 요청자에게 공개
+    })
+
+    if (commentError) {
+      console.error('댓글 등록 오류:', commentError)
+      // 댓글 등록 실패해도 상태 변경은 성공으로 처리
+    }
+  }
+
+  revalidatePath('/workspace')
+  revalidatePath('/requests')
+  revalidatePath(`/requests/${requestId}`)
+
+  return { success: true }
+}
+

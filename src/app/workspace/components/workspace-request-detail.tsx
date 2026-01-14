@@ -19,9 +19,10 @@ import {
 import { ManagerAiChat } from './manager-ai-chat'
 import { OriginalChatModal } from './original-chat-modal'
 import { SimilarCasesPanel } from './similar-cases-panel'
+import { StatusChangeModal } from './status-change-modal'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { assignRequest, updateRequestStatus } from '../actions'
+import { assignRequest, updateRequestStatus, updateRequestStatusWithReason } from '../actions'
 import { toast } from 'sonner'
 
 interface AssignedRequest {
@@ -71,6 +72,8 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
   const [isOriginalChatOpen, setIsOriginalChatOpen] = useState(false)
   const [hasOriginalChat, setHasOriginalChat] = useState<boolean | null>(null)
+  const [statusModalType, setStatusModalType] = useState<'completed' | 'rejected' | null>(null)
+  const [isStatusModalLoading, setIsStatusModalLoading] = useState(false)
 
   const priorityConfig = PRIORITY_CONFIG[request.priority as keyof typeof PRIORITY_CONFIG] || PRIORITY_CONFIG.medium
   const statusConfig = STATUS_CONFIG[request.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.requested
@@ -111,6 +114,29 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
       toast.error('상태 변경 중 오류가 발생했습니다.')
     } finally {
       setIsUpdatingStatus(false)
+    }
+  }
+
+  // 모달을 통한 상태 변경 (완료/반려)
+  const handleStatusWithReason = async (reason: string) => {
+    if (!statusModalType) return
+
+    setIsStatusModalLoading(true)
+    try {
+      const result = await updateRequestStatusWithReason(request.id, statusModalType, reason)
+      if (result.error) {
+        toast.error(result.error)
+      } else {
+        const statusLabel = statusModalType === 'completed' ? '완료' : '반려'
+        toast.success(`요청이 ${statusLabel} 처리되었습니다.`)
+        onStatusChange?.(request.id, statusModalType)
+        setStatusModalType(null)
+        router.refresh()
+      }
+    } catch {
+      toast.error('상태 변경 중 오류가 발생했습니다.')
+    } finally {
+      setIsStatusModalLoading(false)
     }
   }
 
@@ -226,24 +252,24 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
 
           {request.status === 'processing' && (
             <Button
-              onClick={() => handleStatusUpdate('completed')}
+              onClick={() => setStatusModalType('completed')}
               disabled={isUpdatingStatus}
               className="w-full bg-emerald-600 hover:bg-emerald-700"
             >
               <CheckCircle2 className="size-4 mr-2" />
-              {isUpdatingStatus ? '변경 중...' : '처리 완료'}
+              처리 완료
             </Button>
           )}
 
           {request.status !== 'completed' && request.status !== 'rejected' && (
             <Button
               variant="outline"
-              onClick={() => handleStatusUpdate('rejected')}
+              onClick={() => setStatusModalType('rejected')}
               disabled={isUpdatingStatus}
               className="w-full text-rose-600 border-rose-200 hover:bg-rose-50"
             >
               <AlertTriangle className="size-4 mr-2" />
-              {isUpdatingStatus ? '변경 중...' : '반려'}
+              반려
             </Button>
           )}
         </div>
@@ -282,6 +308,17 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
         onOpenChange={setIsOriginalChatOpen}
         onChatExistsChange={setHasOriginalChat}
       />
+
+      {/* 상태 변경 모달 (완료/반려) */}
+      {statusModalType && (
+        <StatusChangeModal
+          open={!!statusModalType}
+          onOpenChange={(open) => !open && setStatusModalType(null)}
+          type={statusModalType}
+          onConfirm={handleStatusWithReason}
+          isLoading={isStatusModalLoading}
+        />
+      )}
     </div>
   )
 }
