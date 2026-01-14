@@ -4,10 +4,22 @@ import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import { ClipboardList, ChevronDown, Pencil, Check } from 'lucide-react'
+import { ClipboardList, ChevronDown, Pencil, Check, Loader2 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { createClient } from '@/lib/supabase/client'
+import { DuplicateAlert } from './duplicate-alert'
+
+interface SimilarRequest {
+  id: string
+  title: string
+  description: string
+  status: string
+  type: string
+  system_name: string | null
+  created_at: string
+  similarity: number
+}
 
 interface System {
   id: string
@@ -50,6 +62,10 @@ export function RequirementCard({ data, onUpdate, readOnly = false }: Requiremen
   const [isExpanded, setIsExpanded] = useState(true)
   const [systems, setSystems] = useState<System[]>([])
   const [isLoadingSystems, setIsLoadingSystems] = useState(false)
+  const [similarRequests, setSimilarRequests] = useState<SimilarRequest[]>([])
+  const [hasDuplicate, setHasDuplicate] = useState(false)
+  const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false)
+  const [duplicatesDismissed, setDuplicatesDismissed] = useState(false)
 
   // 시스템 목록 로드
   useEffect(() => {
@@ -57,6 +73,40 @@ export function RequirementCard({ data, onUpdate, readOnly = false }: Requiremen
       loadSystems()
     }
   }, [isEditing])
+
+  // 중복 요청 탐지
+  useEffect(() => {
+    if (data.title || data.description) {
+      checkDuplicates()
+    }
+  }, [data.title, data.description, data.system])
+
+  async function checkDuplicates() {
+    if (duplicatesDismissed) return
+
+    setIsCheckingDuplicates(true)
+    try {
+      const response = await fetch('/api/ai/similar-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: data.title,
+          description: data.description,
+          system: data.system
+        })
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        setSimilarRequests(result.similarRequests || [])
+        setHasDuplicate(result.hasDuplicate || false)
+      }
+    } catch (error) {
+      console.error('Failed to check duplicates:', error)
+    } finally {
+      setIsCheckingDuplicates(false)
+    }
+  }
 
   async function loadSystems() {
     setIsLoadingSystems(true)
@@ -87,15 +137,36 @@ export function RequirementCard({ data, onUpdate, readOnly = false }: Requiremen
   const typeInfo = typeLabels[data.type || 'other']
 
   return (
-    <div className="rounded-xl border border-rose-200 bg-rose-50 overflow-hidden">
-      {/* Header */}
-      <div
-        className="flex items-center gap-3 px-4 py-3 bg-rose-100 cursor-pointer"
-        onClick={() => setIsExpanded(!isExpanded)}
-      >
-        <ClipboardList className="size-5 text-rose-600" />
-        <span className="flex-1 font-medium text-rose-700">요구사항 분석 결과</span>
-        <ChevronDown
+    <div className="space-y-3">
+      {/* 중복 요청 알림 */}
+      {!duplicatesDismissed && similarRequests.length > 0 && (
+        <DuplicateAlert
+          similarRequests={similarRequests}
+          hasDuplicate={hasDuplicate}
+          onDismiss={() => {
+            setDuplicatesDismissed(true)
+            setSimilarRequests([])
+          }}
+        />
+      )}
+
+      {/* 중복 확인 중 로딩 */}
+      {isCheckingDuplicates && (
+        <div className="flex items-center gap-2 text-sm text-gray-500 px-2">
+          <Loader2 className="size-4 animate-spin" />
+          <span>유사 요청 확인 중...</span>
+        </div>
+      )}
+
+      <div className="rounded-xl border border-rose-200 bg-rose-50 overflow-hidden">
+        {/* Header */}
+        <div
+          className="flex items-center gap-3 px-4 py-3 bg-rose-100 cursor-pointer"
+          onClick={() => setIsExpanded(!isExpanded)}
+        >
+          <ClipboardList className="size-5 text-rose-600" />
+          <span className="flex-1 font-medium text-rose-700">요구사항 분석 결과</span>
+          <ChevronDown
           className={cn(
             'size-5 text-rose-600 transition-transform',
             isExpanded ? 'rotate-180' : ''
@@ -267,6 +338,7 @@ export function RequirementCard({ data, onUpdate, readOnly = false }: Requiremen
           )}
         </div>
       )}
+      </div>
     </div>
   )
 }
