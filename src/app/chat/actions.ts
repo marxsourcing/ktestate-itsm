@@ -163,6 +163,51 @@ export async function addMessage(
   return { message: data }
 }
 
+export async function updateMessageMetadata(
+  messageId: string,
+  metadata: Record<string, unknown>
+) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: '로그인이 필요합니다.' }
+  }
+
+  // 메시지 소유권 확인 (대화를 통해)
+  const { data: message } = await supabase
+    .from('messages')
+    .select('conversation_id')
+    .eq('id', messageId)
+    .single()
+
+  if (!message) {
+    return { error: '메시지를 찾을 수 없습니다.' }
+  }
+
+  const { data: conversation } = await supabase
+    .from('conversations')
+    .select('id')
+    .eq('id', message.conversation_id)
+    .eq('user_id', user.id)
+    .single()
+
+  if (!conversation) {
+    return { error: '권한이 없습니다.' }
+  }
+
+  const { error } = await supabase
+    .from('messages')
+    .update({ metadata })
+    .eq('id', messageId)
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  return { success: true }
+}
+
 export async function confirmRequirement(
   conversationId: string,
   requirementData: {
@@ -171,6 +216,8 @@ export async function confirmRequirement(
     type: string
     system?: string
     system_id?: string
+    module?: string
+    module_id?: string
   }
 ) {
   const supabase = await createClient()
@@ -215,6 +262,21 @@ export async function confirmRequirement(
     }
   }
 
+  // 모듈 이름으로 module_id 조회
+  let moduleId = requirementData.module_id
+  if (!moduleId && requirementData.module && systemId) {
+    const { data: moduleData } = await supabase
+      .from('system_modules')
+      .select('id')
+      .eq('system_id', systemId)
+      .eq('name', requirementData.module)
+      .maybeSingle()
+
+    if (moduleData) {
+      moduleId = moduleData.id
+    }
+  }
+
   // 서비스 요청 생성
   const { data: request, error: reqError } = await supabase
     .from('service_requests')
@@ -224,6 +286,7 @@ export async function confirmRequirement(
       description: requirementData.description,
       type: requirementData.type || 'other',
       system_id: systemId,
+      module_id: moduleId,
       status: 'requested',
       priority: 'medium',
     })

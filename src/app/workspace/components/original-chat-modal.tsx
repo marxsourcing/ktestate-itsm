@@ -161,7 +161,7 @@ export function OriginalChatModal({
           </DialogTitle>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 px-6">
+        <ScrollArea className="flex-1 px-6 overflow-y-auto">
           {isLoading ? (
             <div className="flex items-center justify-center h-64">
               <Loader2 className="size-8 animate-spin text-blue-500" />

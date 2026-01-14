@@ -67,6 +67,7 @@ export type Request = {
   requester?: { full_name?: string; email: string }
   manager?: { full_name?: string; email: string } | null
   system?: { name: string } | null
+  module?: { name: string } | null
 }
 
 interface KanbanBoardProps {

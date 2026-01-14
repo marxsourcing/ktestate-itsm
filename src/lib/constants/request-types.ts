@@ -37,3 +37,35 @@ export const USER_ROLES = {
 } as const
 
 export type UserRole = keyof typeof USER_ROLES
+
+// 시스템 모듈 타입
+export interface SystemModule {
+  id: string
+  system_id: string
+  code: string
+  name: string
+  primary_manager_id: string | null
+  secondary_manager_id: string | null
+  is_active: boolean
+  sort_order: number
+  notify_primary: boolean
+  delay_notification: boolean
+  created_at: string
+  updated_at: string
+  // 조인된 데이터
+  system?: {
+    id: string
+    name: string
+    code: string
+  }
+  primary_manager?: {
+    id: string
+    full_name: string
+    email: string
+  }
+  secondary_manager?: {
+    id: string
+    full_name: string
+    email: string
+  }
+}

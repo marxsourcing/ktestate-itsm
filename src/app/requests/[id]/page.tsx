@@ -51,7 +51,8 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
       *,
       requester:profiles!service_requests_requester_id_fkey(full_name, email),
       manager:profiles!service_requests_manager_id_fkey(full_name, email),
-      system:systems(name)
+      system:systems(name),
+      module:system_modules(name)
     `)
     .eq('id', id)
     .single()
@@ -190,7 +191,12 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
                     <Server className="size-4 text-gray-400" />
                     <div>
                       <span className="text-xs text-gray-400 block">관련 시스템</span>
-                      <span className="text-gray-700">{request.system.name}</span>
+                      <span className="text-gray-700">
+                        {request.system.name}
+                        {request.module?.name && (
+                          <span className="text-gray-500"> / {request.module.name}</span>
+                        )}
+                      </span>
                     </div>
                   </div>
                 )}

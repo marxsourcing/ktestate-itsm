@@ -36,6 +36,7 @@ interface AssignedRequest {
   completed_at?: string
   requester?: { full_name?: string; email: string }
   system?: { name: string } | null
+  module?: { name: string } | null
 }
 
 interface WorkspaceRequestDetailProps {
@@ -195,7 +196,12 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
             <div className="flex items-center gap-2 text-sm">
               <Server className="size-4 text-gray-400" />
               <span className="text-gray-500">시스템:</span>
-              <span className="text-gray-900">{request.system.name}</span>
+              <span className="text-gray-900">
+                {request.system.name}
+                {request.module?.name && (
+                  <span className="text-gray-500"> / {request.module.name}</span>
+                )}
+              </span>
             </div>
           )}
           <div className="flex items-center gap-2 text-sm">
@@ -295,7 +301,8 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
             type: request.type,
             priority: request.priority,
             requesterName: request.requester?.full_name || request.requester?.email,
-            systemName: request.system?.name
+            systemName: request.system?.name,
+            moduleName: request.module?.name
           }}
         />
       </div>

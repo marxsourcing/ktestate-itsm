@@ -122,11 +122,14 @@ export function RequestCard({
           {TYPE_LABELS[request.type] || request.type}
         </span>
 
-        {/* System */}
+        {/* System & Module */}
         {request.system?.name && (
           <span className="flex items-center gap-1">
             <Server className="size-3" />
             {request.system.name}
+            {request.module?.name && (
+              <span className="text-gray-400">/ {request.module.name}</span>
+            )}
           </span>
         )}
 

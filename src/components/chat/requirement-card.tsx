@@ -27,6 +27,13 @@ interface System {
   code: string | null
 }
 
+interface Module {
+  id: string
+  system_id: string
+  code: string
+  name: string
+}
+
 interface RequirementData {
   system?: string
   module?: string
@@ -39,6 +46,7 @@ interface RequirementCardProps {
   data: RequirementData
   onUpdate?: (data: RequirementData) => void
   readOnly?: boolean
+  excludeRequestId?: string  // 유사 요청 검색 시 제외할 요청 ID (이미 확정된 요청 조회 시)
 }
 
 const typeLabels: Record<string, { label: string; color: string }> = {
@@ -56,23 +64,44 @@ const typeLabels: Record<string, { label: string; color: string }> = {
 // 새 유형만 표시 (편집 모드용)
 const editableTypes = ['feature_add', 'feature_improve', 'bug_fix', 'other'] as const
 
-export function RequirementCard({ data, onUpdate, readOnly = false }: RequirementCardProps) {
+export function RequirementCard({ data, onUpdate, readOnly = false, excludeRequestId }: RequirementCardProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [editData, setEditData] = useState(data)
   const [isExpanded, setIsExpanded] = useState(true)
   const [systems, setSystems] = useState<System[]>([])
+  const [modules, setModules] = useState<Module[]>([])
+  const [filteredModules, setFilteredModules] = useState<Module[]>([])
   const [isLoadingSystems, setIsLoadingSystems] = useState(false)
+  const [isLoadingModules, setIsLoadingModules] = useState(false)
   const [similarRequests, setSimilarRequests] = useState<SimilarRequest[]>([])
   const [hasDuplicate, setHasDuplicate] = useState(false)
   const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false)
   const [duplicatesDismissed, setDuplicatesDismissed] = useState(false)
 
-  // 시스템 목록 로드
+  // 시스템 및 모듈 목록 로드
   useEffect(() => {
     if (isEditing && systems.length === 0) {
       loadSystems()
+      loadModules()
     }
   }, [isEditing])
+
+  // 시스템 선택 시 모듈 필터링
+  useEffect(() => {
+    if (editData.system && systems.length > 0 && modules.length > 0) {
+      const selectedSystem = systems.find(
+        s => s.name === editData.system || s.code === editData.system
+      )
+      if (selectedSystem) {
+        const systemModules = modules.filter(m => m.system_id === selectedSystem.id)
+        setFilteredModules(systemModules)
+      } else {
+        setFilteredModules([])
+      }
+    } else {
+      setFilteredModules([])
+    }
+  }, [editData.system, systems, modules])
 
   // 중복 요청 탐지
   useEffect(() => {
@@ -92,7 +121,8 @@ export function RequirementCard({ data, onUpdate, readOnly = false }: Requiremen
         body: JSON.stringify({
           title: data.title,
           description: data.description,
-          system: data.system
+          system: data.system,
+          excludeId: excludeRequestId  // 이미 확정된 요청 조회 시 해당 요청 제외
         })
       })
 
@@ -115,6 +145,7 @@ export function RequirementCard({ data, onUpdate, readOnly = false }: Requiremen
       const { data: systemsData, error } = await supabase
         .from('systems')
         .select('id, name, code')
+        .eq('status', 'active')
         .order('name')
 
       if (error) {
@@ -126,6 +157,28 @@ export function RequirementCard({ data, onUpdate, readOnly = false }: Requiremen
       console.error('Error loading systems:', err)
     } finally {
       setIsLoadingSystems(false)
+    }
+  }
+
+  async function loadModules() {
+    setIsLoadingModules(true)
+    try {
+      const supabase = createClient()
+      const { data: modulesData, error } = await supabase
+        .from('system_modules')
+        .select('id, system_id, code, name')
+        .eq('is_active', true)
+        .order('sort_order')
+
+      if (error) {
+        console.error('Failed to load modules:', error)
+      } else {
+        setModules(modulesData || [])
+      }
+    } catch (err) {
+      console.error('Error loading modules:', err)
+    } finally {
+      setIsLoadingModules(false)
     }
   }
 
@@ -185,7 +238,7 @@ export function RequirementCard({ data, onUpdate, readOnly = false }: Requiremen
                   <label className="text-xs text-gray-500 mb-1 block">시스템</label>
                   <select
                     value={editData.system || ''}
-                    onChange={(e) => setEditData({ ...editData, system: e.target.value })}
+                    onChange={(e) => setEditData({ ...editData, system: e.target.value, module: '' })}
                     className="w-full h-10 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-rose-100 focus:border-rose-400"
                     disabled={isLoadingSystems}
                   >
@@ -202,12 +255,32 @@ export function RequirementCard({ data, onUpdate, readOnly = false }: Requiremen
                 </div>
                 <div>
                   <label className="text-xs text-gray-500 mb-1 block">모듈</label>
-                  <Input
-                    value={editData.module || ''}
-                    onChange={(e) => setEditData({ ...editData, module: e.target.value })}
-                    className="bg-white border-gray-300 text-gray-900"
-                    placeholder="모듈 입력"
-                  />
+                  {filteredModules.length > 0 ? (
+                    <select
+                      value={editData.module || ''}
+                      onChange={(e) => setEditData({ ...editData, module: e.target.value })}
+                      className="w-full h-10 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-rose-100 focus:border-rose-400"
+                      disabled={isLoadingModules}
+                    >
+                      <option value="">모듈 선택</option>
+                      {filteredModules.map((module) => (
+                        <option key={module.id} value={module.name}>
+                          {module.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <Input
+                      value={editData.module || ''}
+                      onChange={(e) => setEditData({ ...editData, module: e.target.value })}
+                      className="bg-white border-gray-300 text-gray-900"
+                      placeholder={editData.system ? '모듈 입력' : '시스템을 먼저 선택하세요'}
+                      disabled={!editData.system}
+                    />
+                  )}
+                  {isLoadingModules && (
+                    <p className="text-xs text-gray-400 mt-1">모듈 목록 로딩 중...</p>
+                  )}
                 </div>
               </div>
 

@@ -32,6 +32,7 @@ export type AssignedRequest = {
   completed_at?: string
   requester?: { full_name?: string; email: string }
   system?: { name: string } | null
+  module?: { name: string } | null
 }
 
 interface RequestListProps {

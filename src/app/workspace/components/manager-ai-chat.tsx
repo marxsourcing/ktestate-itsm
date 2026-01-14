@@ -29,6 +29,7 @@ interface RequestContext {
   priority: string
   requesterName?: string
   systemName?: string
+  moduleName?: string
 }
 
 interface ManagerAiChatProps {

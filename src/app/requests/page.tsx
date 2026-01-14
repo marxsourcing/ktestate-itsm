@@ -28,6 +28,7 @@ export default async function RequestsPage() {
     .select(`
       *,
       system:systems(name),
+      module:system_modules(name),
       requester:profiles!service_requests_requester_id_fkey(full_name, email),
       manager:profiles!service_requests_manager_id_fkey(full_name, email)
     `)

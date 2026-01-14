@@ -36,9 +36,10 @@ interface ChatMessagesProps {
   messages: Message[]
   isLoading?: boolean
   onRequirementUpdate?: (data: RequirementData) => void
+  excludeRequestId?: string  // 유사 요청 검색 시 제외할 요청 ID
 }
 
-export function ChatMessages({ messages, isLoading, onRequirementUpdate }: ChatMessagesProps) {
+export function ChatMessages({ messages, isLoading, onRequirementUpdate, excludeRequestId }: ChatMessagesProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -116,6 +117,7 @@ export function ChatMessages({ messages, isLoading, onRequirementUpdate }: ChatM
                   <RequirementCard
                     data={message.metadata.requirementCard}
                     onUpdate={onRequirementUpdate}
+                    excludeRequestId={excludeRequestId}
                   />
                 </div>
               )}

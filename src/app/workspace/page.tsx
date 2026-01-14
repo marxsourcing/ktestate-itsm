@@ -31,6 +31,7 @@ export default async function WorkspacePage() {
     .select(`
       *,
       system:systems(name),
+      module:system_modules(name),
       requester:profiles!service_requests_requester_id_fkey(full_name, email)
     `)
     .eq('manager_id', user.id)
@@ -44,6 +45,7 @@ export default async function WorkspacePage() {
     .select(`
       *,
       system:systems(name),
+      module:system_modules(name),
       requester:profiles!service_requests_requester_id_fkey(full_name, email)
     `)
     .is('manager_id', null)
@@ -60,6 +62,7 @@ export default async function WorkspacePage() {
     .select(`
       *,
       system:systems(name),
+      module:system_modules(name),
       requester:profiles!service_requests_requester_id_fkey(full_name, email)
     `)
     .eq('manager_id', user.id)
