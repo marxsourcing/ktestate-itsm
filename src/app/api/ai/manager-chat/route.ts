@@ -5,7 +5,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 const MANAGER_SYSTEM_PROMPT = `당신은 KT Estate의 IT 서비스 담당자를 위한 AI 협업 어시스턴트입니다.
 
 담당자가 서비스 요청을 처리하는 데 도움을 주세요:
-1. 유사 사례 검색 요청 시: 과거에 비슷한 요청이 있었을 것으로 가정하고, 어떻게 처리되었을지 예상 답변 제공
+1. 유사 사례 검색 요청 시: 제공된 유사 사례 데이터를 분석하여 실제 과거 처리 사례와 권장 처리 방안 제공
 2. 답변 초안 요청 시: 요청자에게 보낼 전문적이고 친근한 답변 초안 작성
 3. 처리 계획 요청 시: 단계별 처리 방법과 예상 소요 시간 제안
 4. 위험 요소 분석 요청 시: 주의해야 할 사항과 고려점 안내
@@ -115,6 +115,24 @@ export async function POST(request: NextRequest) {
 - 요청 내용: ${requestContext.description}`
     }
 
+    // 유사 사례 검색 요청인 경우 실제 DB에서 유사 사례 조회
+    const lowerMessage = message.toLowerCase()
+    let similarCasesData = ''
+    if (lowerMessage.includes('유사') || lowerMessage.includes('사례') || lowerMessage.includes('과거')) {
+      const similarCases = await searchSimilarCases(supabase, requestContext?.title || '', requestContext?.description || '', requestContext?.systemName)
+      if (similarCases.length > 0) {
+        similarCasesData = `\n\n[실제 유사 사례 데이터]\n${similarCases.map((c, i) => `
+사례 ${i + 1} (유사도 ${c.similarity}%):
+- 제목: ${c.title}
+- 상태: ${c.status}
+- 유형: ${c.type}
+- 요청 내용: ${c.description?.slice(0, 200) || '내용 없음'}
+- 처리일: ${c.created_at}
+${c.comments ? `- 처리 답변: ${c.comments}` : ''}`).join('\n')}`
+        contextPrompt += similarCasesData
+      }
+    }
+
     // Gemini API 호출
     const geminiApiKey = process.env.GEMINI_API_KEY
 
@@ -222,6 +240,127 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     )
   }
+}
+
+// 유사 사례 검색 함수
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function searchSimilarCases(supabase: any, title: string, description: string, systemName?: string) {
+  try {
+    const searchText = `${title} ${description}`.trim()
+    const keywords = extractKeywords(searchText)
+
+    if (keywords.length === 0) return []
+
+    // 유사 요청 검색
+    let query = supabase
+      .from('service_requests')
+      .select(`
+        id,
+        title,
+        description,
+        status,
+        type,
+        created_at,
+        systems:system_id (name)
+      `)
+      .in('status', ['completed', 'rejected']) // 처리 완료된 건만
+      .order('created_at', { ascending: false })
+      .limit(30)
+
+    // 시스템 필터
+    if (systemName) {
+      const { data: systemData } = await supabase
+        .from('systems')
+        .select('id')
+        .or(`name.eq.${systemName},code.eq.${systemName},name.ilike.%${systemName}%`)
+        .maybeSingle()
+
+      if (systemData) {
+        query = query.eq('system_id', systemData.id)
+      }
+    }
+
+    const { data: requests } = await query
+
+    // 유사도 계산
+    interface SimilarCase {
+      id: string
+      title: string
+      description: string
+      status: string
+      type: string
+      created_at: string
+      similarity: number
+      comments?: string
+    }
+    const similarCases: SimilarCase[] = []
+
+    for (const req of requests || []) {
+      const reqText = `${req.title || ''} ${req.description || ''}`.toLowerCase()
+      const similarity = calculateSimilarity(keywords, reqText)
+
+      if (similarity >= 30) {
+        // 댓글(처리 답변) 조회
+        const { data: comments } = await supabase
+          .from('sr_comments')
+          .select('content')
+          .eq('request_id', req.id)
+          .eq('is_internal', false)
+          .order('created_at', { ascending: false })
+          .limit(1)
+
+        similarCases.push({
+          id: req.id,
+          title: req.title,
+          description: req.description,
+          status: req.status === 'completed' ? '완료' : '반려',
+          type: req.type,
+          created_at: new Date(req.created_at).toLocaleDateString('ko-KR'),
+          similarity: Math.round(similarity),
+          comments: comments?.[0]?.content?.slice(0, 200)
+        })
+      }
+    }
+
+    // 유사도 순 정렬
+    similarCases.sort((a, b) => b.similarity - a.similarity)
+    return similarCases.slice(0, 3) // 상위 3개만 반환
+  } catch (error) {
+    console.error('Similar cases search error:', error)
+    return []
+  }
+}
+
+// 키워드 추출
+function extractKeywords(text: string): string[] {
+  const stopWords = new Set([
+    '의', '가', '이', '은', '들', '는', '좀', '잘', '걍', '과', '도', '를', '으로',
+    '자', '에', '와', '한', '하다', '것', '수', '등', '및', '더', '위', '때', '중',
+    '그', '이런', '저런', '어떤', '무슨', '그런', '이것', '저것', '그것', '해주세요',
+    '부탁', '드립니다', '합니다', '입니다', '있습니다', '없습니다', '싶습니다'
+  ])
+
+  return text
+    .toLowerCase()
+    .replace(/[^\w\sㄱ-ㅎㅏ-ㅣ가-힣]/g, ' ')
+    .split(/\s+/)
+    .filter(word => word.length >= 2 && !stopWords.has(word))
+}
+
+// 유사도 계산
+function calculateSimilarity(keywords: string[], targetText: string): number {
+  if (keywords.length === 0) return 0
+
+  let matchCount = 0
+  const targetLower = targetText.toLowerCase()
+
+  for (const keyword of keywords) {
+    if (targetLower.includes(keyword)) {
+      matchCount++
+    }
+  }
+
+  return (matchCount / keywords.length) * 100
 }
 
 // 더미 응답 생성

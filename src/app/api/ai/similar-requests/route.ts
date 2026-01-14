@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { title, description, system } = body
+    const { title, description, system, excludeId } = body
 
     if (!title && !description) {
       return NextResponse.json({ error: '제목 또는 설명이 필요합니다.' }, { status: 400 })
@@ -75,6 +75,11 @@ export async function POST(request: NextRequest) {
     const similarRequests: SimilarRequest[] = []
 
     for (const req of requests || []) {
+      // 현재 요청 자체는 제외
+      if (excludeId && req.id === excludeId) {
+        continue
+      }
+
       const reqText = `${req.title || ''} ${req.description || ''}`.toLowerCase()
       const similarity = calculateSimilarity(keywords, reqText)
 

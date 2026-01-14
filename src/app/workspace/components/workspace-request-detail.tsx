@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { ManagerAiChat } from './manager-ai-chat'
 import { OriginalChatModal } from './original-chat-modal'
+import { SimilarCasesPanel } from './similar-cases-panel'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { assignRequest, updateRequestStatus } from '../actions'
@@ -202,7 +203,7 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
           </Button>
 
           {request.status === 'requested' && (
-            <Button 
+            <Button
               onClick={handleAssign}
               disabled={isAssigning}
               className="w-full bg-indigo-600 hover:bg-indigo-700"
@@ -211,7 +212,7 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
               {isAssigning ? '배정 중...' : '내게 배정하기'}
             </Button>
           )}
-          
+
           {request.status === 'reviewing' && (
             <Button
               onClick={() => handleStatusUpdate('processing')}
@@ -245,6 +246,16 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
               {isUpdatingStatus ? '변경 중...' : '반려'}
             </Button>
           )}
+        </div>
+
+        {/* Similar Cases Panel */}
+        <div className="p-4 border-t border-gray-100">
+          <SimilarCasesPanel
+            requestId={request.id}
+            requestTitle={request.title}
+            requestDescription={request.description}
+            systemName={request.system?.name}
+          />
         </div>
       </div>
 
