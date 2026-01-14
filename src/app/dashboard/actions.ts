@@ -24,11 +24,11 @@ export async function getDashboardStats(): Promise<{ stats?: DashboardStatsData;
     .from('service_requests')
     .select('*', { count: 'exact', head: true })
 
-  // 대기 중인 요청 (requested, reviewing)
+  // 대기 중인 요청 (draft, requested, approved, consulting)
   const { count: pendingRequests } = await supabase
     .from('service_requests')
     .select('*', { count: 'exact', head: true })
-    .in('status', ['requested', 'reviewing'])
+    .in('status', ['draft', 'requested', 'approved', 'consulting'])
 
   // 완료된 요청
   const { count: completedRequests } = await supabase
@@ -170,9 +170,16 @@ export async function getStatusDistribution(): Promise<{ data?: StatusData[]; er
   }
 
   const statusLabels: Record<string, string> = {
-    requested: '접수 대기',
-    reviewing: '검토 중',
-    processing: '처리 중',
+    draft: '작성중',
+    requested: '요청',
+    approved: '승인',
+    consulting: '실무협의',
+    accepted: '접수',
+    processing: '처리중',
+    test_requested: '테스트요청',
+    test_completed: '테스트완료',
+    deploy_requested: '배포요청',
+    deploy_approved: '배포승인',
     completed: '완료',
     rejected: '반려'
   }
@@ -282,7 +289,7 @@ export async function getSystemStats(): Promise<{ data?: SystemStatsData[]; erro
       .from('service_requests')
       .select('*', { count: 'exact', head: true })
       .eq('system_id', system.id)
-      .in('status', ['requested', 'reviewing', 'processing'])
+      .in('status', ['draft', 'requested', 'approved', 'consulting', 'accepted', 'processing', 'test_requested', 'test_completed', 'deploy_requested', 'deploy_approved'])
 
     const { count: completed } = await supabase
       .from('service_requests')
@@ -312,7 +319,7 @@ export async function getSystemStats(): Promise<{ data?: SystemStatsData[]; erro
       .from('service_requests')
       .select('*', { count: 'exact', head: true })
       .is('system_id', null)
-      .in('status', ['requested', 'reviewing', 'processing'])
+      .in('status', ['draft', 'requested', 'approved', 'consulting', 'accepted', 'processing', 'test_requested', 'test_completed', 'deploy_requested', 'deploy_approved'])
 
     const { count: noSystemCompleted } = await supabase
       .from('service_requests')
@@ -376,12 +383,12 @@ export async function getManagerStats(): Promise<{ data?: ManagerStatsData[]; er
 
     if (!total || total === 0) continue
 
-    // 대기 중 (requested, reviewing)
+    // 대기 중 (draft, requested, approved, consulting, accepted)
     const { count: pending } = await supabase
       .from('service_requests')
       .select('*', { count: 'exact', head: true })
       .eq('manager_id', manager.id)
-      .in('status', ['requested', 'reviewing'])
+      .in('status', ['draft', 'requested', 'approved', 'consulting', 'accepted'])
 
     // 처리 중
     const { count: processing } = await supabase

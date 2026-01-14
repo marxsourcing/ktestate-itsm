@@ -14,7 +14,15 @@ import {
   FileText,
   AlertTriangle,
   Link as LinkIcon,
-  Eye
+  Eye,
+  ThumbsUp,
+  Users,
+  ClipboardCheck,
+  TestTube2,
+  CheckSquare,
+  Rocket,
+  ShieldCheck,
+  ArrowRight
 } from 'lucide-react'
 import { ManagerAiChat } from './manager-ai-chat'
 import { OriginalChatModal } from './original-chat-modal'
@@ -53,9 +61,16 @@ const PRIORITY_CONFIG = {
 }
 
 const STATUS_CONFIG = {
+  draft: { label: '작성중', color: 'bg-gray-100 text-gray-600' },
   requested: { label: '요청', color: 'bg-amber-100 text-amber-700' },
-  reviewing: { label: '검토중', color: 'bg-blue-100 text-blue-700' },
+  approved: { label: '승인', color: 'bg-sky-100 text-sky-700' },
+  consulting: { label: '실무협의', color: 'bg-indigo-100 text-indigo-700' },
+  accepted: { label: '접수', color: 'bg-blue-100 text-blue-700' },
   processing: { label: '처리중', color: 'bg-violet-100 text-violet-700' },
+  test_requested: { label: '테스트요청', color: 'bg-orange-100 text-orange-700' },
+  test_completed: { label: '테스트완료', color: 'bg-teal-100 text-teal-700' },
+  deploy_requested: { label: '배포요청', color: 'bg-cyan-100 text-cyan-700' },
+  deploy_approved: { label: '배포승인', color: 'bg-lime-100 text-lime-700' },
   completed: { label: '완료', color: 'bg-emerald-100 text-emerald-700' },
   rejected: { label: '반려', color: 'bg-red-100 text-red-700' },
 }
@@ -234,40 +249,182 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
             {hasOriginalChat === false ? '원본 채팅 없음' : '요청자 원본 채팅 보기'}
           </Button>
 
+          {/* 상태별 다음 단계 버튼들 */}
           {request.status === 'requested' && (
+            <>
+              <Button
+                onClick={handleAssign}
+                disabled={isAssigning}
+                className="w-full bg-indigo-600 hover:bg-indigo-700"
+              >
+                <Play className="size-4 mr-2" />
+                {isAssigning ? '배정 중...' : '내게 배정하기'}
+              </Button>
+              <Button
+                onClick={() => handleStatusUpdate('approved')}
+                disabled={isUpdatingStatus}
+                className="w-full bg-sky-600 hover:bg-sky-700"
+              >
+                <ThumbsUp className="size-4 mr-2" />
+                승인
+              </Button>
+            </>
+          )}
+
+          {request.status === 'approved' && (
+            <>
+              <Button
+                onClick={() => handleStatusUpdate('consulting')}
+                disabled={isUpdatingStatus}
+                className="w-full bg-indigo-600 hover:bg-indigo-700"
+              >
+                <Users className="size-4 mr-2" />
+                실무협의 요청
+              </Button>
+              <Button
+                onClick={() => handleStatusUpdate('accepted')}
+                disabled={isUpdatingStatus}
+                className="w-full bg-blue-600 hover:bg-blue-700"
+              >
+                <ClipboardCheck className="size-4 mr-2" />
+                접수
+              </Button>
+            </>
+          )}
+
+          {request.status === 'consulting' && (
             <Button
-              onClick={handleAssign}
-              disabled={isAssigning}
-              className="w-full bg-indigo-600 hover:bg-indigo-700"
+              onClick={() => handleStatusUpdate('accepted')}
+              disabled={isUpdatingStatus}
+              className="w-full bg-blue-600 hover:bg-blue-700"
             >
-              <Play className="size-4 mr-2" />
-              {isAssigning ? '배정 중...' : '내게 배정하기'}
+              <ClipboardCheck className="size-4 mr-2" />
+              접수
             </Button>
           )}
 
-          {request.status === 'reviewing' && (
+          {request.status === 'accepted' && (
             <Button
               onClick={() => handleStatusUpdate('processing')}
               disabled={isUpdatingStatus}
               className="w-full bg-violet-600 hover:bg-violet-700"
             >
               <Play className="size-4 mr-2" />
-              {isUpdatingStatus ? '변경 중...' : '처리 시작'}
+              처리 시작
             </Button>
           )}
 
           {request.status === 'processing' && (
-            <Button
-              onClick={() => setStatusModalType('completed')}
-              disabled={isUpdatingStatus}
-              className="w-full bg-emerald-600 hover:bg-emerald-700"
-            >
-              <CheckCircle2 className="size-4 mr-2" />
-              처리 완료
-            </Button>
+            <>
+              <Button
+                onClick={() => handleStatusUpdate('test_requested')}
+                disabled={isUpdatingStatus}
+                className="w-full bg-orange-600 hover:bg-orange-700"
+              >
+                <TestTube2 className="size-4 mr-2" />
+                테스트 요청
+              </Button>
+              <Button
+                onClick={() => setStatusModalType('completed')}
+                disabled={isUpdatingStatus}
+                className="w-full bg-emerald-600 hover:bg-emerald-700"
+              >
+                <CheckCircle2 className="size-4 mr-2" />
+                처리 완료
+              </Button>
+            </>
           )}
 
-          {request.status !== 'completed' && request.status !== 'rejected' && (
+          {request.status === 'test_requested' && (
+            <>
+              <Button
+                onClick={() => handleStatusUpdate('test_completed')}
+                disabled={isUpdatingStatus}
+                className="w-full bg-teal-600 hover:bg-teal-700"
+              >
+                <CheckSquare className="size-4 mr-2" />
+                테스트 완료
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => handleStatusUpdate('processing')}
+                disabled={isUpdatingStatus}
+                className="w-full"
+              >
+                <ArrowRight className="size-4 mr-2 rotate-180" />
+                처리중으로 되돌리기
+              </Button>
+            </>
+          )}
+
+          {request.status === 'test_completed' && (
+            <>
+              <Button
+                onClick={() => handleStatusUpdate('deploy_requested')}
+                disabled={isUpdatingStatus}
+                className="w-full bg-cyan-600 hover:bg-cyan-700"
+              >
+                <Rocket className="size-4 mr-2" />
+                배포 요청
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => handleStatusUpdate('processing')}
+                disabled={isUpdatingStatus}
+                className="w-full"
+              >
+                <ArrowRight className="size-4 mr-2 rotate-180" />
+                처리중으로 되돌리기
+              </Button>
+            </>
+          )}
+
+          {request.status === 'deploy_requested' && (
+            <>
+              <Button
+                onClick={() => handleStatusUpdate('deploy_approved')}
+                disabled={isUpdatingStatus}
+                className="w-full bg-lime-600 hover:bg-lime-700"
+              >
+                <ShieldCheck className="size-4 mr-2" />
+                배포 승인
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => handleStatusUpdate('test_completed')}
+                disabled={isUpdatingStatus}
+                className="w-full"
+              >
+                <ArrowRight className="size-4 mr-2 rotate-180" />
+                테스트완료로 되돌리기
+              </Button>
+            </>
+          )}
+
+          {request.status === 'deploy_approved' && (
+            <>
+              <Button
+                onClick={() => setStatusModalType('completed')}
+                disabled={isUpdatingStatus}
+                className="w-full bg-emerald-600 hover:bg-emerald-700"
+              >
+                <CheckCircle2 className="size-4 mr-2" />
+                완료
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => handleStatusUpdate('deploy_requested')}
+                disabled={isUpdatingStatus}
+                className="w-full"
+              >
+                <ArrowRight className="size-4 mr-2 rotate-180" />
+                배포요청으로 되돌리기
+              </Button>
+            </>
+          )}
+
+          {/* 반려 버튼 (완료/반려 상태가 아닐 때만) */}
+          {request.status !== 'completed' && request.status !== 'rejected' && request.status !== 'draft' && (
             <Button
               variant="outline"
               onClick={() => setStatusModalType('rejected')}

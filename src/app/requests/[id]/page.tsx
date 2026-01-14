@@ -17,9 +17,16 @@ import { CommentsSection } from './components/comments-section'
 import { RequestChatArea } from './components/request-chat-area'
 
 const STATUS_CONFIG = {
+  draft: { label: '작성중', color: 'bg-gray-100 text-gray-600 border-gray-200' },
   requested: { label: '요청', color: 'bg-amber-100 text-amber-700 border-amber-200' },
-  reviewing: { label: '검토중', color: 'bg-blue-100 text-blue-700 border-blue-200' },
+  approved: { label: '승인', color: 'bg-sky-100 text-sky-700 border-sky-200' },
+  consulting: { label: '실무협의', color: 'bg-indigo-100 text-indigo-700 border-indigo-200' },
+  accepted: { label: '접수', color: 'bg-blue-100 text-blue-700 border-blue-200' },
   processing: { label: '처리중', color: 'bg-violet-100 text-violet-700 border-violet-200' },
+  test_requested: { label: '테스트요청', color: 'bg-orange-100 text-orange-700 border-orange-200' },
+  test_completed: { label: '테스트완료', color: 'bg-teal-100 text-teal-700 border-teal-200' },
+  deploy_requested: { label: '배포요청', color: 'bg-cyan-100 text-cyan-700 border-cyan-200' },
+  deploy_approved: { label: '배포승인', color: 'bg-lime-100 text-lime-700 border-lime-200' },
   completed: { label: '완료', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
   rejected: { label: '반려', color: 'bg-red-100 text-red-700 border-red-200' },
 }

@@ -22,14 +22,21 @@ interface HistoryTimelineProps {
 
 const getStatusLabel = (status: string | null) => {
   if (!status) return ''
-  switch (status) {
-    case 'requested': return '요청'
-    case 'reviewing': return '검토중'
-    case 'processing': return '처리중'
-    case 'completed': return '완료'
-    case 'rejected': return '반려'
-    default: return status
+  const statusLabels: Record<string, string> = {
+    draft: '작성중',
+    requested: '요청',
+    approved: '승인',
+    consulting: '실무협의',
+    accepted: '접수',
+    processing: '처리중',
+    test_requested: '테스트요청',
+    test_completed: '테스트완료',
+    deploy_requested: '배포요청',
+    deploy_approved: '배포승인',
+    completed: '완료',
+    rejected: '반려',
   }
+  return statusLabels[status] || status
 }
 
 const getActionIcon = (action: string) => {
