@@ -124,13 +124,14 @@ export type Request = {
   description: string
   status: string
   priority: string
-  type: string
   created_at: string
   completed_at?: string
   requester?: { full_name?: string; email: string }
   manager?: { full_name?: string; email: string } | null
   system?: { name: string } | null
   module?: { name: string } | null
+  category_lv1?: { id: string; name: string } | null  // 대분류 (SR 구분)
+  category_lv2?: { id: string; name: string } | null  // 소분류 (SR 상세 구분)
 }
 
 interface KanbanBoardProps {

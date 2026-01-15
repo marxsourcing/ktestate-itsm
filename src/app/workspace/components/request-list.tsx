@@ -31,13 +31,18 @@ export type AssignedRequest = {
   description: string
   status: string
   priority: string
-  type: string
   created_at: string
   completed_at?: string
   requester?: { full_name?: string; email: string }
   manager?: { full_name?: string; email: string }
-  system?: { name: string } | null
-  module?: { name: string } | null
+  system?: { id: string; name: string } | null
+  module?: { id: string; name: string } | null
+  system_id?: string | null
+  module_id?: string | null
+  category_lv1?: { id: string; name: string } | null  // 대분류 (SR 구분)
+  category_lv2?: { id: string; name: string } | null  // 소분류 (SR 상세 구분)
+  category_lv1_id?: string | null
+  category_lv2_id?: string | null
   test_manager_id?: string | null
   deploy_manager_id?: string | null
   deploy_type?: string | null
@@ -90,12 +95,6 @@ const PRIORITY_CONFIG = {
   },
 }
 
-const TYPE_LABELS: Record<string, string> = {
-  feature_add: '기능추가',
-  feature_improve: '기능개선',
-  bug_fix: '버그수정',
-  other: '기타',
-}
 
 export function RequestList({
   myRequests: initialMyRequests,
@@ -498,9 +497,13 @@ function RequestItem({
             )}>
               {config.label}
             </span>
-            <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">
-              {TYPE_LABELS[request.type] || request.type}
-            </span>
+            {/* SR 구분 (대분류/소분류) */}
+            {request.category_lv1?.name && (
+              <span className="text-[10px] text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded">
+                {request.category_lv1.name}
+                {request.category_lv2?.name && ` / ${request.category_lv2.name}`}
+              </span>
+            )}
             <span className="text-[10px] text-gray-400 flex items-center gap-1">
               <Clock className="size-3" />
               {timeAgo}

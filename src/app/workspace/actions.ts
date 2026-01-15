@@ -579,3 +579,170 @@ export async function approveDeploy(requestId: string) {
 
   return { success: true }
 }
+
+// 요청 정보 수정 (본인에게 배정된 요청만)
+export async function updateRequestDetails(
+  requestId: string,
+  data: {
+    system_id?: string | null
+    module_id?: string | null
+    category_lv1_id?: string | null
+    category_lv2_id?: string | null
+    priority?: string
+  }
+) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: '로그인이 필요합니다.' }
+  }
+
+  // 현재 요청 정보 조회 (권한 확인 및 변경 이력 기록용)
+  const { data: currentRequest } = await supabase
+    .from('service_requests')
+    .select(`
+      manager_id, system_id, module_id, category_lv1_id, category_lv2_id, priority,
+      system:systems(name),
+      module:system_modules(name),
+      category_lv1:request_categories_lv1(name),
+      category_lv2:request_categories_lv2(name)
+    `)
+    .eq('id', requestId)
+    .single()
+
+  if (!currentRequest) {
+    return { error: '요청을 찾을 수 없습니다.' }
+  }
+
+  // 권한 확인: 본인에게 배정된 요청만 수정 가능
+  // 관리자는 모든 요청 수정 가능
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  const isAdmin = profile?.role === 'admin'
+  const isAssignedManager = currentRequest.manager_id === user.id
+
+  if (!isAdmin && !isAssignedManager) {
+    return { error: '본인에게 배정된 요청만 수정할 수 있습니다.' }
+  }
+
+  // 업데이트 데이터 준비
+  const updateData: Record<string, string | null> = {}
+  const changes: string[] = []
+
+  if (data.system_id !== undefined && data.system_id !== currentRequest.system_id) {
+    updateData.system_id = data.system_id || null
+    changes.push('시스템')
+  }
+  if (data.module_id !== undefined && data.module_id !== currentRequest.module_id) {
+    updateData.module_id = data.module_id || null
+    changes.push('모듈')
+  }
+  if (data.category_lv1_id !== undefined && data.category_lv1_id !== currentRequest.category_lv1_id) {
+    updateData.category_lv1_id = data.category_lv1_id || null
+    changes.push('SR 구분')
+  }
+  if (data.category_lv2_id !== undefined && data.category_lv2_id !== currentRequest.category_lv2_id) {
+    updateData.category_lv2_id = data.category_lv2_id || null
+    changes.push('SR 상세 구분')
+  }
+  if (data.priority !== undefined && data.priority !== currentRequest.priority) {
+    updateData.priority = data.priority
+    changes.push('우선순위')
+  }
+
+  if (Object.keys(updateData).length === 0) {
+    return { success: true, message: '변경된 내용이 없습니다.' }
+  }
+
+  const { error } = await supabase
+    .from('service_requests')
+    .update(updateData)
+    .eq('id', requestId)
+
+  if (error) {
+    console.error('요청 정보 수정 오류:', error)
+    return { error: '요청 정보 수정 중 오류가 발생했습니다.' }
+  }
+
+  // 수정 히스토리 기록
+  await supabase.from('sr_history').insert({
+    request_id: requestId,
+    actor_id: user.id,
+    action: '요청 정보 수정',
+    note: `변경 항목: ${changes.join(', ')}`,
+  })
+
+  revalidatePath('/workspace')
+  revalidatePath('/requests')
+  revalidatePath(`/requests/${requestId}`)
+
+  return { success: true }
+}
+
+// 시스템 목록 조회
+export async function getSystems() {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('systems')
+    .select('id, name, code')
+    .eq('status', 'active')
+    .order('name')
+
+  if (error) {
+    console.error('시스템 목록 조회 오류:', error)
+    return { systems: [] }
+  }
+
+  return { systems: data || [] }
+}
+
+// 모듈 목록 조회
+export async function getModules() {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('system_modules')
+    .select('id, system_id, code, name')
+    .eq('is_active', true)
+    .order('sort_order')
+
+  if (error) {
+    console.error('모듈 목록 조회 오류:', error)
+    return { modules: [] }
+  }
+
+  return { modules: data || [] }
+}
+
+// 분류 목록 조회
+export async function getCategories() {
+  const supabase = await createClient()
+
+  const { data: lv1Data, error: lv1Error } = await supabase
+    .from('request_categories_lv1')
+    .select('id, code, name')
+    .eq('is_active', true)
+    .order('sort_order')
+
+  const { data: lv2Data, error: lv2Error } = await supabase
+    .from('request_categories_lv2')
+    .select('id, category_lv1_id, code, name')
+    .eq('is_active', true)
+    .order('sort_order')
+
+  if (lv1Error || lv2Error) {
+    console.error('분류 목록 조회 오류:', lv1Error || lv2Error)
+    return { categoriesLv1: [], categoriesLv2: [] }
+  }
+
+  return {
+    categoriesLv1: lv1Data || [],
+    categoriesLv2: lv2Data || []
+  }
+}

@@ -30,11 +30,13 @@ export default async function WorkspacePage() {
     .from('service_requests')
     .select(`
       *,
-      system:systems(name),
-      module:system_modules(name),
+      system:systems(id, name),
+      module:system_modules(id, name),
       requester:profiles!service_requests_requester_id_fkey(full_name, email),
       test_manager:profiles!service_requests_test_manager_id_fkey(full_name, email),
-      deploy_manager:profiles!service_requests_deploy_manager_id_fkey(full_name, email)
+      deploy_manager:profiles!service_requests_deploy_manager_id_fkey(full_name, email),
+      category_lv1:request_categories_lv1(id, name),
+      category_lv2:request_categories_lv2(id, name)
     `)
     .eq('manager_id', user.id)
     .in('status', ['requested', 'approved', 'consulting', 'accepted', 'processing', 'test_requested', 'test_completed', 'deploy_requested', 'deploy_approved'])
@@ -46,10 +48,12 @@ export default async function WorkspacePage() {
     .from('service_requests')
     .select(`
       *,
-      system:systems(name),
-      module:system_modules(name),
+      system:systems(id, name),
+      module:system_modules(id, name),
       requester:profiles!service_requests_requester_id_fkey(full_name, email),
-      manager:profiles!service_requests_manager_id_fkey(full_name, email)
+      manager:profiles!service_requests_manager_id_fkey(full_name, email),
+      category_lv1:request_categories_lv1(id, name),
+      category_lv2:request_categories_lv2(id, name)
     `)
     .eq('test_manager_id', user.id)
     .neq('manager_id', user.id) // 본인이 담당자가 아닌 경우만
@@ -61,10 +65,12 @@ export default async function WorkspacePage() {
     .from('service_requests')
     .select(`
       *,
-      system:systems(name),
-      module:system_modules(name),
+      system:systems(id, name),
+      module:system_modules(id, name),
       requester:profiles!service_requests_requester_id_fkey(full_name, email),
-      manager:profiles!service_requests_manager_id_fkey(full_name, email)
+      manager:profiles!service_requests_manager_id_fkey(full_name, email),
+      category_lv1:request_categories_lv1(id, name),
+      category_lv2:request_categories_lv2(id, name)
     `)
     .eq('deploy_manager_id', user.id)
     .neq('manager_id', user.id) // 본인이 담당자가 아닌 경우만
@@ -76,9 +82,11 @@ export default async function WorkspacePage() {
     .from('service_requests')
     .select(`
       *,
-      system:systems(name),
-      module:system_modules(name),
-      requester:profiles!service_requests_requester_id_fkey(full_name, email)
+      system:systems(id, name),
+      module:system_modules(id, name),
+      requester:profiles!service_requests_requester_id_fkey(full_name, email),
+      category_lv1:request_categories_lv1(id, name),
+      category_lv2:request_categories_lv2(id, name)
     `)
     .is('manager_id', null)
     .in('status', ['requested', 'reviewing'])
@@ -93,9 +101,11 @@ export default async function WorkspacePage() {
     .from('service_requests')
     .select(`
       *,
-      system:systems(name),
-      module:system_modules(name),
-      requester:profiles!service_requests_requester_id_fkey(full_name, email)
+      system:systems(id, name),
+      module:system_modules(id, name),
+      requester:profiles!service_requests_requester_id_fkey(full_name, email),
+      category_lv1:request_categories_lv1(id, name),
+      category_lv2:request_categories_lv2(id, name)
     `)
     .eq('manager_id', user.id)
     .eq('status', 'completed')

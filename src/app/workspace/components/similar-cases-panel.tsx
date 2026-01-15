@@ -24,10 +24,11 @@ interface SimilarCase {
   title: string
   description: string
   status: string
-  type: string
   system_name: string | null
   created_at: string
   similarity: number
+  category_lv1_name?: string | null  // 대분류 (SR 구분)
+  category_lv2_name?: string | null  // 소분류 (SR 상세 구분)
   comments?: Array<{
     content: string
     is_internal: boolean
@@ -52,12 +53,6 @@ const STATUS_CONFIG: Record<string, { label: string; icon: typeof CheckCircle; c
   rejected: { label: '반려', icon: XCircle, color: 'text-red-600' },
 }
 
-const TYPE_LABELS: Record<string, string> = {
-  feature_add: '기능추가',
-  feature_improve: '기능개선',
-  bug_fix: '버그수정',
-  other: '기타',
-}
 
 export function SimilarCasesPanel({
   requestId,
@@ -242,7 +237,13 @@ export function SimilarCasesPanel({
                           {caseItem.title}
                         </h4>
                         <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
-                          <span>{TYPE_LABELS[caseItem.type] || caseItem.type}</span>
+                          {/* SR 구분 (대분류/소분류) */}
+                          {caseItem.category_lv1_name && (
+                            <span className="text-rose-600">
+                              {caseItem.category_lv1_name}
+                              {caseItem.category_lv2_name && ` / ${caseItem.category_lv2_name}`}
+                            </span>
+                          )}
                           {caseItem.system_name && (
                             <>
                               <span>•</span>

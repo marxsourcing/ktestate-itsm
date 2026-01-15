@@ -23,7 +23,8 @@ import {
   Rocket,
   ShieldCheck,
   ArrowRight,
-  Calculator
+  Calculator,
+  Pencil
 } from 'lucide-react'
 import { ManagerAiChat } from './manager-ai-chat'
 import { OriginalChatModal } from './original-chat-modal'
@@ -31,6 +32,7 @@ import { SimilarCasesPanel } from './similar-cases-panel'
 import { StatusChangeModal } from './status-change-modal'
 import { DeployInfoModal, DeployInfo } from './deploy-info-modal'
 import { TestRequestModal, TestInfo } from './test-request-modal'
+import { RequestEditModal } from './request-edit-modal'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { assignRequest, updateRequestStatus, updateRequestStatusWithReason, updateRequestWithDeployInfo, getManagers, requestTest, completeTest, approveDeploy } from '../actions'
@@ -42,13 +44,18 @@ interface AssignedRequest {
   description: string
   status: string
   priority: string
-  type: string
   created_at: string
   completed_at?: string
   requester?: { full_name?: string; email: string }
   manager?: { full_name?: string; email: string }
-  system?: { name: string } | null
-  module?: { name: string } | null
+  system?: { id: string; name: string } | null
+  module?: { id: string; name: string } | null
+  system_id?: string | null
+  module_id?: string | null
+  category_lv1?: { id: string; name: string } | null  // 대분류 (SR 구분)
+  category_lv2?: { id: string; name: string } | null  // 소분류 (SR 상세 구분)
+  category_lv1_id?: string | null
+  category_lv2_id?: string | null
   test_manager_id?: string | null
   deploy_type?: string | null
   deploy_manager_id?: string | null
@@ -89,12 +96,6 @@ const STATUS_CONFIG = {
   rejected: { label: '반려', color: 'bg-red-100 text-red-700' },
 }
 
-const TYPE_LABELS: Record<string, string> = {
-  feature_add: '기능추가',
-  feature_improve: '기능개선',
-  bug_fix: '버그수정',
-  other: '기타',
-}
 
 export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange }: WorkspaceRequestDetailProps) {
   const router = useRouter()
@@ -108,6 +109,7 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
   const [isDeployModalLoading, setIsDeployModalLoading] = useState(false)
   const [isTestModalOpen, setIsTestModalOpen] = useState(false)
   const [isTestModalLoading, setIsTestModalLoading] = useState(false)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [managers, setManagers] = useState<{ id: string; full_name: string | null; email: string }[]>([])
 
   // 담당자 목록 로드
@@ -325,10 +327,18 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
               {request.requester?.full_name || request.requester?.email}
             </span>
           </div>
+          {/* SR 구분 (대분류/소분류) */}
           <div className="flex items-center gap-2 text-sm">
             <Tag className="size-4 text-gray-400" />
-            <span className="text-gray-500">유형:</span>
-            <span className="text-gray-900">{TYPE_LABELS[request.type] || request.type}</span>
+            <span className="text-gray-500">SR 구분:</span>
+            {request.category_lv1?.name ? (
+              <span className="text-gray-900">
+                {request.category_lv1.name}
+                {request.category_lv2?.name && ` / ${request.category_lv2.name}`}
+              </span>
+            ) : (
+              <span className="text-gray-400">미분류</span>
+            )}
           </div>
           {request.system && (
             <div className="flex items-center gap-2 text-sm">
@@ -392,6 +402,16 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
         {/* Quick Actions */}
         <div className="p-4 space-y-2">
           <h3 className="text-xs font-semibold text-gray-500 mb-3">빠른 작업</h3>
+
+          {/* 요청 정보 수정 버튼 */}
+          <Button
+            variant="outline"
+            onClick={() => setIsEditModalOpen(true)}
+            className="w-full gap-2 text-indigo-600 border-indigo-200 hover:bg-indigo-50 hover:border-indigo-300"
+          >
+            <Pencil className="size-4" />
+            요청 정보 수정
+          </Button>
 
           {/* 원본 채팅 보기 버튼 */}
           <Button
@@ -622,11 +642,12 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
           requestContext={{
             title: request.title,
             description: request.description,
-            type: request.type,
             priority: request.priority,
             requesterName: request.requester?.full_name || request.requester?.email,
             systemName: request.system?.name,
-            moduleName: request.module?.name
+            moduleName: request.module?.name,
+            category_lv1_name: request.category_lv1?.name,
+            category_lv2_name: request.category_lv2?.name
           }}
         />
       </div>
@@ -680,6 +701,20 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
         isLoading={isTestModalLoading}
         managers={managers}
         currentUserId={currentUserId}
+      />
+
+      {/* 요청 정보 수정 모달 */}
+      <RequestEditModal
+        open={isEditModalOpen}
+        onOpenChange={setIsEditModalOpen}
+        requestId={request.id}
+        currentData={{
+          system_id: request.system_id || request.system?.id || null,
+          module_id: request.module_id || request.module?.id || null,
+          category_lv1_id: request.category_lv1_id || request.category_lv1?.id || null,
+          category_lv2_id: request.category_lv2_id || request.category_lv2?.id || null,
+          priority: request.priority
+        }}
       />
     </div>
   )

@@ -1,6 +1,6 @@
 'use client'
 
-import { History, UserCheck, MessageSquare, FileText, RefreshCcw } from 'lucide-react'
+import { History, UserCheck, MessageSquare, FileText, RefreshCcw, Pencil } from 'lucide-react'
 
 interface HistoryItem {
   id: string
@@ -49,6 +49,9 @@ const getActionIcon = (action: string) => {
       return <UserCheck className="h-4 w-4" />
     case 'comment_added':
       return <MessageSquare className="h-4 w-4" />
+    case 'details_updated':
+    case '요청 정보 수정':
+      return <Pencil className="h-4 w-4" />
     default:
       return <History className="h-4 w-4" />
   }
@@ -60,6 +63,8 @@ const getActionLabel = (action: string) => {
     case 'status_change': return '상태 변경'
     case 'assigned': return '담당자 배정'
     case 'comment_added': return '댓글 추가'
+    case 'details_updated': return '요청 정보 수정'
+    case '요청 정보 수정': return '요청 정보 수정'
     default: return action
   }
 }
@@ -74,6 +79,9 @@ const getActionColor = (action: string) => {
       return 'bg-green-500'
     case 'comment_added':
       return 'bg-purple-500'
+    case 'details_updated':
+    case '요청 정보 수정':
+      return 'bg-indigo-500'
     default:
       return 'bg-gray-500'
   }

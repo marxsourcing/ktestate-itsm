@@ -39,12 +39,6 @@ const PRIORITY_CONFIG = {
   low: { label: '낮음', color: 'bg-gray-100 text-gray-600' },
 }
 
-const TYPE_LABELS: Record<string, string> = {
-  feature_add: '기능추가',
-  feature_improve: '기능개선',
-  bug_fix: '버그수정',
-  other: '기타',
-}
 
 export default async function RequestDetailPage({ params }: { params: { id: string } }) {
   const { id } = await params
@@ -60,7 +54,9 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
       requester:profiles!service_requests_requester_id_fkey(full_name, email),
       manager:profiles!service_requests_manager_id_fkey(full_name, email),
       system:systems(name),
-      module:system_modules(name)
+      module:system_modules(name),
+      category_lv1:request_categories_lv1(id, name),
+      category_lv2:request_categories_lv2(id, name)
     `)
     .eq('id', id)
     .single()
@@ -129,9 +125,13 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
               <Badge variant="outline" className={priorityConfig.color}>
                 {priorityConfig.label}
               </Badge>
-              <span className="text-xs text-gray-400 px-2 py-0.5 rounded bg-gray-100">
-                {TYPE_LABELS[request.type] || request.type}
-              </span>
+              {/* SR 구분 (대분류/소분류) */}
+              {request.category_lv1?.name && (
+                <span className="text-xs px-2 py-0.5 rounded bg-rose-100 text-rose-700">
+                  {request.category_lv1.name}
+                  {request.category_lv2?.name && ` / ${request.category_lv2.name}`}
+                </span>
+              )}
             </div>
             <h1 className="text-xl font-bold text-gray-900 line-clamp-1">
               {request.title}

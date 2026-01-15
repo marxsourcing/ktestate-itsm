@@ -5,7 +5,6 @@ import {
   exportToExcelMultiSheet,
   ExportColumn,
   SheetData,
-  TYPE_LABELS,
   STATUS_LABELS,
   PRIORITY_LABELS,
   CONVERSATION_STATUS_LABELS,
@@ -16,7 +15,6 @@ interface RequestData {
   id: string
   title: string
   description: string
-  type: string
   status: string
   priority: string
   created_at: string
@@ -24,6 +22,8 @@ interface RequestData {
   requester: { full_name: string | null; email: string } | null
   assignee: { full_name: string | null; email: string } | null
   system: { name: string } | null
+  category_lv1: { name: string } | null
+  category_lv2: { name: string } | null
 }
 
 // 채팅 데이터 타입
@@ -31,11 +31,16 @@ interface ChatData {
   id: string
   title: string
   status: string
-  type: string
   created_at: string
   updated_at: string
   user: { full_name: string | null; email: string } | null
-  request: { id: string; title: string; status: string } | null
+  request: {
+    id: string
+    title: string
+    status: string
+    category_lv1: { name: string } | null
+    category_lv2: { name: string } | null
+  } | null
   message_count?: number
 }
 
@@ -156,7 +161,9 @@ async function exportRequests(
       *,
       requester:profiles!service_requests_requester_id_fkey(full_name, email),
       assignee:profiles!service_requests_assignee_id_fkey(full_name, email),
-      system:systems(name)
+      system:systems(name),
+      category_lv1:request_categories_lv1(name),
+      category_lv2:request_categories_lv2(name)
     `
     )
     .order('created_at', { ascending: false })
@@ -164,7 +171,8 @@ async function exportRequests(
   const columns: ExportColumn<RequestData>[] = [
     { header: '상태', accessor: (r) => STATUS_LABELS[r.status] || r.status, width: 10 },
     { header: '제목', accessor: 'title', width: 40 },
-    { header: '유형', accessor: (r) => TYPE_LABELS[r.type] || r.type, width: 12 },
+    { header: 'SR 구분', accessor: (r) => r.category_lv1?.name || '-', width: 15 },
+    { header: 'SR 상세 구분', accessor: (r) => r.category_lv2?.name || '-', width: 15 },
     { header: '우선순위', accessor: (r) => PRIORITY_LABELS[r.priority] || r.priority, width: 10 },
     { header: '요청자', accessor: (r) => r.requester?.full_name || r.requester?.email || '-', width: 15 },
     { header: '담당자', accessor: (r) => r.assignee?.full_name || r.assignee?.email || '-', width: 15 },
@@ -206,7 +214,11 @@ async function exportChats(
       `
       *,
       user:profiles!conversations_user_id_fkey(id, full_name, email),
-      request:service_requests(id, title, status)
+      request:service_requests(
+        id, title, status,
+        category_lv1:request_categories_lv1(name),
+        category_lv2:request_categories_lv2(name)
+      )
     `
     )
 
@@ -255,6 +267,8 @@ async function exportChats(
     { header: '메시지 수', accessor: 'message_count', width: 10 },
     { header: '연결된 요청', accessor: (c) => c.request?.title || '-', width: 30 },
     { header: '요청 상태', accessor: (c) => (c.request ? STATUS_LABELS[c.request.status] || c.request.status : '-'), width: 10 },
+    { header: 'SR 구분', accessor: (c) => c.request?.category_lv1?.name || '-', width: 15 },
+    { header: 'SR 상세 구분', accessor: (c) => c.request?.category_lv2?.name || '-', width: 15 },
     { header: '생성일', accessor: (c) => formatDateTime(c.created_at), width: 18 },
     { header: '최종 업데이트', accessor: (c) => formatDateTime(c.updated_at), width: 18 },
   ]

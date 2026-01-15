@@ -15,7 +15,6 @@ interface SimilarRequest {
   title: string
   description: string
   status: string
-  type: string
   system_name: string | null
   created_at: string
   similarity: number
@@ -34,12 +33,26 @@ interface Module {
   name: string
 }
 
+interface CategoryLv1 {
+  id: string
+  code: string
+  name: string
+}
+
+interface CategoryLv2 {
+  id: string
+  category_lv1_id: string
+  code: string
+  name: string
+}
+
 interface RequirementData {
   system?: string
   module?: string
-  type?: 'feature_add' | 'feature_improve' | 'bug_fix' | 'other' | 'feature' | 'improvement' | 'bug'
   title?: string
   description?: string
+  category_lv1?: string  // 대분류 (SR 구분)
+  category_lv2?: string  // 소분류 (SR 상세 구분)
 }
 
 interface RequirementCardProps {
@@ -48,21 +61,6 @@ interface RequirementCardProps {
   readOnly?: boolean
   excludeRequestId?: string  // 유사 요청 검색 시 제외할 요청 ID (이미 확정된 요청 조회 시)
 }
-
-const typeLabels: Record<string, { label: string; color: string }> = {
-  // 새 유형 코드
-  feature_add: { label: '기능추가', color: 'bg-blue-100 text-blue-700 border-blue-200' },
-  feature_improve: { label: '기능개선', color: 'bg-rose-100 text-rose-700 border-rose-200' },
-  bug_fix: { label: '버그수정', color: 'bg-red-100 text-red-700 border-red-200' },
-  other: { label: '기타', color: 'bg-gray-100 text-gray-700 border-gray-200' },
-  // 구 유형 코드 호환성
-  feature: { label: '기능추가', color: 'bg-blue-100 text-blue-700 border-blue-200' },
-  improvement: { label: '기능개선', color: 'bg-rose-100 text-rose-700 border-rose-200' },
-  bug: { label: '버그수정', color: 'bg-red-100 text-red-700 border-red-200' },
-}
-
-// 새 유형만 표시 (편집 모드용)
-const editableTypes = ['feature_add', 'feature_improve', 'bug_fix', 'other'] as const
 
 export function RequirementCard({ data, onUpdate, readOnly = false, excludeRequestId }: RequirementCardProps) {
   const [isEditing, setIsEditing] = useState(false)
@@ -73,16 +71,25 @@ export function RequirementCard({ data, onUpdate, readOnly = false, excludeReque
   const [filteredModules, setFilteredModules] = useState<Module[]>([])
   const [isLoadingSystems, setIsLoadingSystems] = useState(false)
   const [isLoadingModules, setIsLoadingModules] = useState(false)
+  const [categoriesLv1, setCategoriesLv1] = useState<CategoryLv1[]>([])
+  const [categoriesLv2, setCategoriesLv2] = useState<CategoryLv2[]>([])
+  const [filteredCategoriesLv2, setFilteredCategoriesLv2] = useState<CategoryLv2[]>([])
+  const [isLoadingCategories, setIsLoadingCategories] = useState(false)
   const [similarRequests, setSimilarRequests] = useState<SimilarRequest[]>([])
   const [hasDuplicate, setHasDuplicate] = useState(false)
   const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false)
   const [duplicatesDismissed, setDuplicatesDismissed] = useState(false)
 
-  // 시스템 및 모듈 목록 로드
+  // 시스템, 모듈, 분류 목록 로드
   useEffect(() => {
-    if (isEditing && systems.length === 0) {
-      loadSystems()
-      loadModules()
+    if (isEditing) {
+      if (systems.length === 0) {
+        loadSystems()
+        loadModules()
+      }
+      if (categoriesLv1.length === 0) {
+        loadCategories()
+      }
     }
   }, [isEditing])
 
@@ -102,6 +109,23 @@ export function RequirementCard({ data, onUpdate, readOnly = false, excludeReque
       setFilteredModules([])
     }
   }, [editData.system, systems, modules])
+
+  // 대분류 선택 시 소분류 필터링
+  useEffect(() => {
+    if (editData.category_lv1 && categoriesLv1.length > 0 && categoriesLv2.length > 0) {
+      const selectedLv1 = categoriesLv1.find(
+        c => c.name === editData.category_lv1 || c.code === editData.category_lv1
+      )
+      if (selectedLv1) {
+        const lv2Categories = categoriesLv2.filter(c => c.category_lv1_id === selectedLv1.id)
+        setFilteredCategoriesLv2(lv2Categories)
+      } else {
+        setFilteredCategoriesLv2([])
+      }
+    } else {
+      setFilteredCategoriesLv2([])
+    }
+  }, [editData.category_lv1, categoriesLv1, categoriesLv2])
 
   // 중복 요청 탐지
   useEffect(() => {
@@ -182,12 +206,47 @@ export function RequirementCard({ data, onUpdate, readOnly = false, excludeReque
     }
   }
 
+  async function loadCategories() {
+    setIsLoadingCategories(true)
+    try {
+      const supabase = createClient()
+
+      // 대분류 로드
+      const { data: lv1Data, error: lv1Error } = await supabase
+        .from('request_categories_lv1')
+        .select('id, code, name')
+        .eq('is_active', true)
+        .order('sort_order')
+
+      if (lv1Error) {
+        console.error('Failed to load categories lv1:', lv1Error)
+      } else {
+        setCategoriesLv1(lv1Data || [])
+      }
+
+      // 소분류 로드
+      const { data: lv2Data, error: lv2Error } = await supabase
+        .from('request_categories_lv2')
+        .select('id, category_lv1_id, code, name')
+        .eq('is_active', true)
+        .order('sort_order')
+
+      if (lv2Error) {
+        console.error('Failed to load categories lv2:', lv2Error)
+      } else {
+        setCategoriesLv2(lv2Data || [])
+      }
+    } catch (err) {
+      console.error('Error loading categories:', err)
+    } finally {
+      setIsLoadingCategories(false)
+    }
+  }
+
   function handleSave() {
     onUpdate?.(editData)
     setIsEditing(false)
   }
-
-  const typeInfo = typeLabels[data.type || 'other']
 
   return (
     <div className="space-y-3">
@@ -284,32 +343,42 @@ export function RequirementCard({ data, onUpdate, readOnly = false, excludeReque
                 </div>
               </div>
 
-              <div>
-                <label className="text-xs text-gray-500 mb-2 block">유형</label>
-                <div className="flex gap-2 flex-wrap">
-                  {editableTypes.map((key) => {
-                    const value = typeLabels[key]
-                    // 현재 데이터의 유형이 구 코드인 경우 새 코드로 매핑
-                    const normalizedType = editData.type === 'feature' ? 'feature_add'
-                      : editData.type === 'improvement' ? 'feature_improve'
-                      : editData.type === 'bug' ? 'bug_fix'
-                      : editData.type
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => setEditData({ ...editData, type: key })}
-                        className={cn(
-                          'px-3 py-1.5 rounded-lg text-sm border transition-all',
-                          normalizedType === key
-                            ? value.color
-                            : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
-                        )}
-                      >
-                        {value.label}
-                      </button>
-                    )
-                  })}
+              {/* 분류 선택 (SR 구분) */}
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">SR 구분 (대분류)</label>
+                  <select
+                    value={editData.category_lv1 || ''}
+                    onChange={(e) => setEditData({ ...editData, category_lv1: e.target.value, category_lv2: '' })}
+                    className="w-full h-10 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-rose-100 focus:border-rose-400"
+                    disabled={isLoadingCategories}
+                  >
+                    <option value="">대분류 선택</option>
+                    {categoriesLv1.map((cat) => (
+                      <option key={cat.id} value={cat.name}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
+                  {isLoadingCategories && (
+                    <p className="text-xs text-gray-400 mt-1">분류 목록 로딩 중...</p>
+                  )}
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">SR 상세 구분 (소분류)</label>
+                  <select
+                    value={editData.category_lv2 || ''}
+                    onChange={(e) => setEditData({ ...editData, category_lv2: e.target.value })}
+                    className="w-full h-10 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-rose-100 focus:border-rose-400"
+                    disabled={!editData.category_lv1 || filteredCategoriesLv2.length === 0}
+                  >
+                    <option value="">소분류 선택</option>
+                    {filteredCategoriesLv2.map((cat) => (
+                      <option key={cat.id} value={cat.name}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -369,12 +438,15 @@ export function RequirementCard({ data, onUpdate, readOnly = false, excludeReque
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <span className="text-xs text-gray-500">유형</span>
-                <div>
-                  <span className={cn('inline-flex px-2 py-0.5 rounded text-xs border', typeInfo.color)}>
-                    {typeInfo.label}
-                  </span>
+              {/* SR 구분 (분류) 표시 */}
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-1">
+                  <span className="text-xs text-gray-500">SR 구분</span>
+                  <p className="text-sm text-gray-900">{data.category_lv1 || '미지정'}</p>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-xs text-gray-500">SR 상세 구분</span>
+                  <p className="text-sm text-gray-900">{data.category_lv2 || '미지정'}</p>
                 </div>
               </div>
 

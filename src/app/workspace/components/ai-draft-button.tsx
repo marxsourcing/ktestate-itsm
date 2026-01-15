@@ -24,10 +24,11 @@ interface RequestInfo {
   id: string
   title: string
   description: string
-  type: string
   priority: string
   requesterName?: string
   systemName?: string
+  category_lv1_name?: string  // 대분류 (SR 구분)
+  category_lv2_name?: string  // 소분류 (SR 상세 구분)
 }
 
 interface AiDraftButtonProps {
@@ -60,10 +61,11 @@ export function AiDraftButton({ request, chatHistory, onApply, className }: AiDr
           requestId: request.id,
           requestTitle: request.title,
           requestDescription: request.description,
-          requestType: request.type,
           requestPriority: request.priority,
           requesterName: request.requesterName,
           systemName: request.systemName,
+          categoryLv1Name: request.category_lv1_name,
+          categoryLv2Name: request.category_lv2_name,
           chatHistory: chatHistory?.map(msg => ({
             role: msg.role,
             content: msg.content

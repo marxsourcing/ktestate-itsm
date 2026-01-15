@@ -104,13 +104,6 @@ export function exportToExcelMultiSheet(
 }
 
 // 라벨 매핑
-export const TYPE_LABELS: Record<string, string> = {
-  feature_add: '기능추가',
-  feature_improve: '기능개선',
-  bug_fix: '버그수정',
-  other: '기타',
-}
-
 export const STATUS_LABELS: Record<string, string> = {
   requested: '요청',
   reviewing: '검토중',

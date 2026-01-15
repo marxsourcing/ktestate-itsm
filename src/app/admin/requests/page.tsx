@@ -24,7 +24,9 @@ export default async function AdminRequestsPage() {
     .select(`
       *,
       requester:profiles!service_requests_requester_id_fkey(full_name, email),
-      system:systems(name)
+      system:systems(name),
+      category_lv1:request_categories_lv1(id, name),
+      category_lv2:request_categories_lv2(id, name)
     `)
     .order('created_at', { ascending: false })
 

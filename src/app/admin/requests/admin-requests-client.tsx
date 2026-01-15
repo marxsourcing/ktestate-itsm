@@ -19,23 +19,17 @@ interface Request {
   id: string
   title: string
   description: string
-  type: string
   status: string
   priority: string
   created_at: string
   requester: { full_name: string | null; email: string } | null
   system: { name: string } | null
+  category_lv1?: { id: string; name: string } | null  // 대분류 (SR 구분)
+  category_lv2?: { id: string; name: string } | null  // 소분류 (SR 상세 구분)
 }
 
 interface AdminRequestsClientProps {
   requests: Request[]
-}
-
-const TYPE_LABELS: Record<string, string> = {
-  feature_add: '기능추가',
-  feature_improve: '기능개선',
-  bug_fix: '버그수정',
-  other: '기타',
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -180,7 +174,14 @@ export function AdminRequestsClient({ requests }: AdminRequestsClientProps) {
                       <div className="text-gray-400 text-xs">{request.requester?.email}</div>
                     </div>
                   </TableCell>
-                  <TableCell>{TYPE_LABELS[request.type] || request.type}</TableCell>
+                  <TableCell>
+                    {request.category_lv1?.name ? (
+                      <span className="text-rose-600">
+                        {request.category_lv1.name}
+                        {request.category_lv2?.name && ` / ${request.category_lv2.name}`}
+                      </span>
+                    ) : '-'}
+                  </TableCell>
                   <TableCell>
                     <Badge variant="outline">{PRIORITY_LABELS[request.priority] || request.priority}</Badge>
                   </TableCell>

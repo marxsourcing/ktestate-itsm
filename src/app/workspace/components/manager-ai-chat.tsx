@@ -25,11 +25,12 @@ interface ChatMessage {
 interface RequestContext {
   title: string
   description: string
-  type: string
   priority: string
   requesterName?: string
   systemName?: string
   moduleName?: string
+  category_lv1_name?: string  // 대분류 (SR 구분)
+  category_lv2_name?: string  // 소분류 (SR 상세 구분)
 }
 
 interface ManagerAiChatProps {

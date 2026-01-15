@@ -36,16 +36,18 @@ export async function createServiceRequest(formData: FormData) {
 
   const title = formData.get('title') as string
   const description = formData.get('description') as string
-  const type = formData.get('type') as any
   const priority = formData.get('priority') as any
   const system_id = formData.get('system_id') as string || null
+  const category_lv1_id = formData.get('category_lv1_id') as string || null
+  const category_lv2_id = formData.get('category_lv2_id') as string || null
 
   const { data, error } = await supabase.from('service_requests').insert({
     title,
     description,
-    type,
     priority,
     system_id,
+    category_lv1_id,
+    category_lv2_id,
     requester_id: user.id,
   }).select('id').single()
 
@@ -212,7 +214,7 @@ export async function getRequestHistory(requestId: string) {
 // 댓글 조회
 export async function getRequestComments(requestId: string) {
   const supabase = await createClient()
-  
+
   const { data, error } = await supabase
     .from('sr_comments')
     .select(`

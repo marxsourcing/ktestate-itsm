@@ -46,6 +46,8 @@ interface RequesterConversation {
     id: string
     title: string
     status: string
+    category_lv1: { name: string } | null
+    category_lv2: { name: string } | null
   } | null
 }
 
@@ -63,6 +65,8 @@ interface ManagerConversation {
     id: string
     title: string
     status: string
+    category_lv1: { name: string } | null
+    category_lv2: { name: string } | null
   } | null
 }
 
@@ -393,6 +397,8 @@ export function AdminChatsClient({ requesterConversations, managerConversations,
                   <TableHead>대화 제목</TableHead>
                   <TableHead>요청자</TableHead>
                   <TableHead>연결된 요청</TableHead>
+                  <TableHead>요청 상태</TableHead>
+                  <TableHead>SR 구분</TableHead>
                   <TableHead>생성일</TableHead>
                   <TableHead>최종 업데이트</TableHead>
                 </TableRow>
@@ -438,6 +444,16 @@ export function AdminChatsClient({ requesterConversations, managerConversations,
                         )}
                       </TableCell>
                       <TableCell className="text-sm text-gray-500">
+                        {conv.request?.status || '-'}
+                      </TableCell>
+                      <TableCell className="text-sm text-gray-500">
+                        {conv.request?.category_lv1?.name
+                          ? (conv.request.category_lv2?.name
+                              ? `${conv.request.category_lv1.name} / ${conv.request.category_lv2.name}`
+                              : conv.request.category_lv1.name)
+                          : '-'}
+                      </TableCell>
+                      <TableCell className="text-sm text-gray-500">
                         {formatDate(conv.created_at)}
                       </TableCell>
                       <TableCell className="text-sm text-gray-500">
@@ -447,7 +463,7 @@ export function AdminChatsClient({ requesterConversations, managerConversations,
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center text-gray-500">
+                    <TableCell colSpan={8} className="h-24 text-center text-gray-500">
                       {hasActiveFilters ? '검색 결과가 없습니다.' : '요청자 채팅 내역이 없습니다.'}
                     </TableCell>
                   </TableRow>
@@ -586,6 +602,8 @@ export function AdminChatsClient({ requesterConversations, managerConversations,
                   <TableHead>대화 제목</TableHead>
                   <TableHead>담당자</TableHead>
                   <TableHead>연결된 요청</TableHead>
+                  <TableHead>요청 상태</TableHead>
+                  <TableHead>SR 구분</TableHead>
                   <TableHead>생성일</TableHead>
                   <TableHead>최종 업데이트</TableHead>
                 </TableRow>
@@ -625,6 +643,16 @@ export function AdminChatsClient({ requesterConversations, managerConversations,
                         )}
                       </TableCell>
                       <TableCell className="text-sm text-gray-500">
+                        {conv.request?.status || '-'}
+                      </TableCell>
+                      <TableCell className="text-sm text-gray-500">
+                        {conv.request?.category_lv1?.name
+                          ? (conv.request.category_lv2?.name
+                              ? `${conv.request.category_lv1.name} / ${conv.request.category_lv2.name}`
+                              : conv.request.category_lv1.name)
+                          : '-'}
+                      </TableCell>
+                      <TableCell className="text-sm text-gray-500">
                         {formatDate(conv.created_at)}
                       </TableCell>
                       <TableCell className="text-sm text-gray-500">
@@ -634,7 +662,7 @@ export function AdminChatsClient({ requesterConversations, managerConversations,
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center text-gray-500">
+                    <TableCell colSpan={7} className="h-24 text-center text-gray-500">
                       {hasActiveManagerFilters ? '검색 결과가 없습니다.' : '담당자 내부 채팅 내역이 없습니다.'}
                     </TableCell>
                   </TableRow>

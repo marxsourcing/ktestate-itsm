@@ -25,7 +25,11 @@ export default async function AdminChatsPage() {
     .select(`
       *,
       user:profiles!conversations_user_id_fkey(id, full_name, email),
-      request:service_requests(id, title, status)
+      request:service_requests(
+        id, title, status,
+        category_lv1:request_categories_lv1(name),
+        category_lv2:request_categories_lv2(name)
+      )
     `)
     .order('updated_at', { ascending: false })
 
@@ -35,7 +39,11 @@ export default async function AdminChatsPage() {
     .select(`
       *,
       manager:profiles!manager_conversations_manager_id_fkey(id, full_name, email),
-      request:service_requests(id, title, status)
+      request:service_requests(
+        id, title, status,
+        category_lv1:request_categories_lv1(name),
+        category_lv2:request_categories_lv2(name)
+      )
     `)
     .order('updated_at', { ascending: false })
 

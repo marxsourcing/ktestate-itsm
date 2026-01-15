@@ -213,11 +213,12 @@ export async function confirmRequirement(
   requirementData: {
     title: string
     description: string
-    type: string
     system?: string
     system_id?: string
     module?: string
     module_id?: string
+    category_lv1?: string
+    category_lv2?: string
   }
 ) {
   const supabase = await createClient()
@@ -277,6 +278,35 @@ export async function confirmRequirement(
     }
   }
 
+  // 대분류 이름 또는 코드로 category_lv1_id 조회
+  let categoryLv1Id: string | null = null
+  if (requirementData.category_lv1) {
+    const { data: lv1Data } = await supabase
+      .from('request_categories_lv1')
+      .select('id')
+      .or(`name.eq.${requirementData.category_lv1},code.eq.${requirementData.category_lv1}`)
+      .maybeSingle()
+
+    if (lv1Data) {
+      categoryLv1Id = lv1Data.id
+    }
+  }
+
+  // 소분류 이름 또는 코드로 category_lv2_id 조회
+  let categoryLv2Id: string | null = null
+  if (requirementData.category_lv2 && categoryLv1Id) {
+    const { data: lv2Data } = await supabase
+      .from('request_categories_lv2')
+      .select('id')
+      .eq('category_lv1_id', categoryLv1Id)
+      .or(`name.eq.${requirementData.category_lv2},code.eq.${requirementData.category_lv2}`)
+      .maybeSingle()
+
+    if (lv2Data) {
+      categoryLv2Id = lv2Data.id
+    }
+  }
+
   // 서비스 요청 생성
   const { data: request, error: reqError } = await supabase
     .from('service_requests')
@@ -284,9 +314,10 @@ export async function confirmRequirement(
       requester_id: user.id,
       title: requirementData.title,
       description: requirementData.description,
-      type: requirementData.type || 'other',
       system_id: systemId,
       module_id: moduleId,
+      category_lv1_id: categoryLv1Id,
+      category_lv2_id: categoryLv2Id,
       status: 'requested',
       priority: 'medium',
     })

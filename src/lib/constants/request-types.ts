@@ -1,13 +1,3 @@
-// 요청 유형 (sr_type ENUM)
-export const REQUEST_TYPES = {
-  feature_add: '기능추가',
-  feature_improve: '기능개선',
-  bug_fix: '버그수정',
-  other: '기타',
-} as const
-
-export type RequestType = keyof typeof REQUEST_TYPES
-
 // 요청 상태 (sr_status ENUM) - 12개 상태 체계
 // 코드: 00-draft, 10-requested, 20-approved, 25-consulting, 30-accepted,
 //       40-processing, 50-test_requested, 55-test_completed, 60-deploy_requested,

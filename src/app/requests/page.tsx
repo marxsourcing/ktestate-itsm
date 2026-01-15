@@ -30,7 +30,9 @@ export default async function RequestsPage() {
       system:systems(name),
       module:system_modules(name),
       requester:profiles!service_requests_requester_id_fkey(full_name, email),
-      manager:profiles!service_requests_manager_id_fkey(full_name, email)
+      manager:profiles!service_requests_manager_id_fkey(full_name, email),
+      category_lv1:request_categories_lv1(id, name),
+      category_lv2:request_categories_lv2(id, name)
     `)
     .order('created_at', { ascending: false })
 

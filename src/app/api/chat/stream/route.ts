@@ -7,24 +7,30 @@ const BASE_SYSTEM_PROMPT = `당신은 KT Estate의 IT 서비스 요구사항 접
 사용자의 요구사항을 분석하여 다음 정보를 파악해야 합니다:
 1. 시스템: 어떤 IT 시스템에 관한 요청인가
 2. 모듈: 해당 시스템의 어떤 기능/모듈에 관한 것인가
-3. 유형: 기능추가(feature_add), 기능개선(feature_improve), 버그수정(bug_fix), 기타(other) 중 하나
-4. 제목: 요구사항을 한 줄로 요약
-5. 상세 내용: 구체적인 요구사항 설명
+3. 대분류(SR 구분): 요청의 대분류 카테고리
+4. 소분류(SR 상세 구분): 대분류 내 세부 분류
+5. 제목: 요구사항을 한 줄로 요약
+6. 상세 내용: 구체적인 요구사항 설명
 
 대화를 통해 부족한 정보를 자연스럽게 물어보세요.
 
 사용자가 이미지를 첨부하면 이미지 내용을 분석하여 요구사항 파악에 활용하세요. 스크린샷이라면 UI 개선점이나 버그를 파악하고, 문서 이미지라면 요구사항을 추출해주세요.
 
-**중요**: 시스템과 모듈은 반드시 아래 목록에서 선택해야 합니다. 사용자가 말한 내용과 가장 유사한 시스템/모듈을 매칭하세요.
+**중요**: 시스템과 모듈은 반드시 아래 목록에서 선택해야 합니다.
 
 {SYSTEM_MODULE_LIST}
+
+**중요**: 대분류와 소분류는 반드시 아래 목록에서 선택해야 합니다.
+
+{CATEGORY_LIST}
 
 충분한 정보가 모이면, 응답 마지막에 다음 형식의 JSON 블록을 포함하세요:
 \`\`\`requirement
 {
   "system": "시스템명 (위 목록에서 선택)",
   "module": "모듈명 (위 목록에서 선택)",
-  "type": "feature_add|feature_improve|bug_fix|other",
+  "category_lv1": "대분류명 (위 목록에서 선택)",
+  "category_lv2": "소분류명 (위 목록에서 선택, 해당 대분류의 소분류 중 선택)",
   "title": "요구사항 제목",
   "description": "상세 설명"
 }
@@ -70,6 +76,44 @@ async function getSystemModuleList(supabase: Awaited<ReturnType<typeof createCli
   return lines.join('\n')
 }
 
+// 대분류/소분류 목록 조회
+async function getCategoryList(supabase: Awaited<ReturnType<typeof createClient>>) {
+  const { data: categoriesLv1 } = await supabase
+    .from('request_categories_lv1')
+    .select('id, code, name')
+    .eq('is_active', true)
+    .order('sort_order')
+
+  const { data: categoriesLv2 } = await supabase
+    .from('request_categories_lv2')
+    .select('id, category_lv1_id, code, name')
+    .eq('is_active', true)
+    .order('sort_order')
+
+  if (!categoriesLv1 || categoriesLv1.length === 0) {
+    return '분류 목록을 불러올 수 없습니다.'
+  }
+
+  const lv2ByLv1 = new Map<string, string[]>()
+  for (const lv2 of categoriesLv2 || []) {
+    const list = lv2ByLv1.get(lv2.category_lv1_id) || []
+    list.push(lv2.name)
+    lv2ByLv1.set(lv2.category_lv1_id, list)
+  }
+
+  const lines: string[] = []
+  for (const lv1 of categoriesLv1) {
+    const subCategories = lv2ByLv1.get(lv1.id) || []
+    if (subCategories.length > 0) {
+      lines.push(`- ${lv1.name}: ${subCategories.join(', ')}`)
+    } else {
+      lines.push(`- ${lv1.name}`)
+    }
+  }
+
+  return lines.join('\n')
+}
+
 export async function POST(request: NextRequest) {
   try {
     // 인증 확인
@@ -95,9 +139,12 @@ export async function POST(request: NextRequest) {
 
     const geminiApiKey = process.env.GEMINI_API_KEY
 
-    // DB에서 시스템/모듈 목록 조회
+    // DB에서 시스템/모듈 목록 및 분류 목록 조회
     const systemModuleList = await getSystemModuleList(supabase)
-    const SYSTEM_PROMPT = BASE_SYSTEM_PROMPT.replace('{SYSTEM_MODULE_LIST}', systemModuleList)
+    const categoryList = await getCategoryList(supabase)
+    const SYSTEM_PROMPT = BASE_SYSTEM_PROMPT
+      .replace('{SYSTEM_MODULE_LIST}', systemModuleList)
+      .replace('{CATEGORY_LIST}', categoryList)
 
     if (!geminiApiKey) {
       // API 키가 없으면 더미 스트리밍 응답
@@ -246,16 +293,26 @@ function createDummyStreamResponse(
     }
   }
 
-  // 유형 키워드
-  const typeKeywords = {
-    bug_fix: ['오류', '에러', '안됨', '안 됨', '버그', '문제'],
-    feature_improve: ['개선', '수정', '변경', '확장'],
-    feature_add: ['추가', '새로운', '기능'],
+  // 대분류 키워드 매핑 (키워드 → 대분류/소분류)
+  const categoryKeywords: Record<string, { lv1: string; lv2: string }> = {
+    '오류': { lv1: '서비스 문의', lv2: '서비스이상신고' },
+    '에러': { lv1: '서비스 문의', lv2: '서비스이상신고' },
+    '안됨': { lv1: '서비스 문의', lv2: '서비스이상신고' },
+    '버그': { lv1: '서비스 문의', lv2: '서비스이상신고' },
+    '문의': { lv1: '서비스 문의', lv2: '단순 문의' },
+    '사용법': { lv1: '서비스 문의', lv2: '사용법 문의' },
+    '개선': { lv1: '개발요청', lv2: '시스템개선' },
+    '수정': { lv1: '개발요청', lv2: '시스템개선' },
+    '추가': { lv1: '개발요청', lv2: '업무개선' },
+    '기능': { lv1: '개발요청', lv2: '업무개선' },
+    '데이터': { lv1: '데이터요청', lv2: '데이터제공' },
+    '배포': { lv1: '배포관리', lv2: '배포요청' },
   }
 
   let detectedSystem = ''
   let detectedModule = ''
-  let detectedType = 'other'
+  let detectedCategoryLv1 = '서비스 문의'
+  let detectedCategoryLv2 = '단순 문의'
 
   // 메시지에서 시스템명 매칭
   for (const sysName of systemNames) {
@@ -277,10 +334,11 @@ function createDummyStreamResponse(
     }
   }
 
-  // 유형 감지
-  for (const [type, words] of Object.entries(typeKeywords)) {
-    if (words.some((w) => message.includes(w))) {
-      detectedType = type
+  // 대분류/소분류 감지
+  for (const [keyword, category] of Object.entries(categoryKeywords)) {
+    if (message.includes(keyword)) {
+      detectedCategoryLv1 = category.lv1
+      detectedCategoryLv2 = category.lv2
       break
     }
   }
@@ -306,7 +364,8 @@ function createDummyStreamResponse(
       requirementCard: {
         system: detectedSystem || (systemNames[0] || '미지정'),
         module: detectedModule || '',
-        type: detectedType,
+        category_lv1: detectedCategoryLv1,
+        category_lv2: detectedCategoryLv2,
         title: title,
         description: allContent.slice(0, 500),
       }
