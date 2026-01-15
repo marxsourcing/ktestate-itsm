@@ -10,7 +10,8 @@ import {
   Server,
   Clock,
   CheckCircle2,
-  MessageCircle
+  MessageCircle,
+  Calculator
 } from 'lucide-react'
 import { HistoryTimeline } from './components/history-timeline'
 import { CommentsSection } from './components/comments-section'
@@ -208,6 +209,46 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
                   </div>
                 )}
               </div>
+
+              {/* Effort Info - Only show if request is completed and has effort data */}
+              {request.status === 'completed' && (
+                request.estimated_fp || request.actual_fp || request.estimated_md || request.actual_md
+              ) && (
+                <div className="mt-4 p-3 rounded-lg bg-emerald-50 border border-emerald-200">
+                  <div className="flex items-center gap-2 text-sm font-medium text-emerald-700 mb-2">
+                    <Calculator className="size-4" />
+                    공수 정보
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    {(request.estimated_fp || request.actual_fp) && (
+                      <div>
+                        <span className="text-xs text-emerald-600 block">Function Point (FP)</span>
+                        <div className="flex gap-2 text-gray-700">
+                          {request.estimated_fp != null && (
+                            <span>예상: {request.estimated_fp}</span>
+                          )}
+                          {request.actual_fp != null && (
+                            <span>실제: {request.actual_fp}</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {(request.estimated_md || request.actual_md) && (
+                      <div>
+                        <span className="text-xs text-emerald-600 block">Man Day (MD)</span>
+                        <div className="flex gap-2 text-gray-700">
+                          {request.estimated_md != null && (
+                            <span>예상: {request.estimated_md}</span>
+                          )}
+                          {request.actual_md != null && (
+                            <span>실제: {request.actual_md}</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

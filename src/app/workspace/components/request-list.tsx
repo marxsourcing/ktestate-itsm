@@ -40,6 +40,14 @@ export type AssignedRequest = {
   module?: { name: string } | null
   test_manager_id?: string | null
   deploy_manager_id?: string | null
+  deploy_type?: string | null
+  deploy_scheduled_at?: string | null
+  deploy_completed_at?: string | null
+  // 공수 관리 필드
+  estimated_fp?: number | null
+  actual_fp?: number | null
+  estimated_md?: number | null
+  actual_md?: number | null
 }
 
 interface RequestListProps {

@@ -22,7 +22,8 @@ import {
   CheckSquare,
   Rocket,
   ShieldCheck,
-  ArrowRight
+  ArrowRight,
+  Calculator
 } from 'lucide-react'
 import { ManagerAiChat } from './manager-ai-chat'
 import { OriginalChatModal } from './original-chat-modal'
@@ -53,6 +54,11 @@ interface AssignedRequest {
   deploy_manager_id?: string | null
   deploy_scheduled_at?: string | null
   deploy_completed_at?: string | null
+  // 공수 관리 필드
+  estimated_fp?: number | null
+  actual_fp?: number | null
+  estimated_md?: number | null
+  actual_md?: number | null
 }
 
 interface WorkspaceRequestDetailProps {
@@ -156,12 +162,12 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
   }
 
   // 모달을 통한 상태 변경 (완료/반려)
-  const handleStatusWithReason = async (reason: string) => {
+  const handleStatusWithReason = async (reason: string, effort?: { estimated_fp?: number | null; actual_fp?: number | null; estimated_md?: number | null; actual_md?: number | null }) => {
     if (!statusModalType) return
 
     setIsStatusModalLoading(true)
     try {
-      const result = await updateRequestStatusWithReason(request.id, statusModalType, reason)
+      const result = await updateRequestStatusWithReason(request.id, statusModalType, reason, effort)
       if (result.error) {
         toast.error(result.error)
       } else {
@@ -340,15 +346,47 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
             <Calendar className="size-4 text-gray-400" />
             <span className="text-gray-500">신청일:</span>
             <span className="text-gray-900">
-              {createdDate.toLocaleDateString('ko-KR', { 
-                year: 'numeric', 
-                month: 'short', 
+              {createdDate.toLocaleDateString('ko-KR', {
+                year: 'numeric',
+                month: 'short',
                 day: 'numeric',
                 hour: '2-digit',
                 minute: '2-digit'
               })}
             </span>
           </div>
+
+          {/* 공수 정보 표시 */}
+          {(request.estimated_fp || request.actual_fp || request.estimated_md || request.actual_md) && (
+            <div className="mt-3 p-3 rounded-lg bg-emerald-50 border border-emerald-200">
+              <div className="flex items-center gap-2 text-xs font-medium text-emerald-700 mb-2">
+                <Calculator className="size-3" />
+                공수 정보
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                {(request.estimated_fp != null || request.actual_fp != null) && (
+                  <div>
+                    <span className="text-emerald-600 block">FP</span>
+                    <span className="text-gray-700">
+                      {request.estimated_fp != null && `예상:${request.estimated_fp}`}
+                      {request.estimated_fp != null && request.actual_fp != null && ' / '}
+                      {request.actual_fp != null && `실제:${request.actual_fp}`}
+                    </span>
+                  </div>
+                )}
+                {(request.estimated_md != null || request.actual_md != null) && (
+                  <div>
+                    <span className="text-emerald-600 block">MD</span>
+                    <span className="text-gray-700">
+                      {request.estimated_md != null && `예상:${request.estimated_md}`}
+                      {request.estimated_md != null && request.actual_md != null && ' / '}
+                      {request.actual_md != null && `실제:${request.actual_md}`}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Quick Actions */}
@@ -610,6 +648,12 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
           type={statusModalType}
           onConfirm={handleStatusWithReason}
           isLoading={isStatusModalLoading}
+          currentEffort={{
+            estimated_fp: request.estimated_fp,
+            actual_fp: request.actual_fp,
+            estimated_md: request.estimated_md,
+            actual_md: request.actual_md,
+          }}
         />
       )}
 

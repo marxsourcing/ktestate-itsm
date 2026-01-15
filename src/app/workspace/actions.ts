@@ -120,11 +120,20 @@ export async function updateRequestStatus(requestId: string, newStatus: string) 
   return { success: true }
 }
 
+// 공수 데이터 타입
+interface EffortData {
+  estimated_fp?: number | null
+  actual_fp?: number | null
+  estimated_md?: number | null
+  actual_md?: number | null
+}
+
 // 사유와 함께 상태 변경 (완료/반려)
 export async function updateRequestStatusWithReason(
   requestId: string,
   newStatus: 'completed' | 'rejected',
-  reason: string
+  reason: string,
+  effort?: EffortData
 ) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -151,10 +160,25 @@ export async function updateRequestStatusWithReason(
 
   const previousStatus = request.status
 
-  // 상태 업데이트
-  const updateData: { status: string; completed_at?: string } = { status: newStatus }
+  // 상태 업데이트 (완료 시 공수 데이터 포함)
+  const updateData: {
+    status: string
+    completed_at?: string
+    estimated_fp?: number | null
+    actual_fp?: number | null
+    estimated_md?: number | null
+    actual_md?: number | null
+  } = { status: newStatus }
+
   if (newStatus === 'completed') {
     updateData.completed_at = new Date().toISOString()
+    // 공수 데이터 추가
+    if (effort) {
+      updateData.estimated_fp = effort.estimated_fp
+      updateData.actual_fp = effort.actual_fp
+      updateData.estimated_md = effort.estimated_md
+      updateData.actual_md = effort.actual_md
+    }
   }
 
   const { error: updateError } = await supabase

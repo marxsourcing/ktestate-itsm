@@ -339,7 +339,7 @@ export async function getSystemStats(): Promise<{ data?: SystemStatsData[]; erro
   // 총 요청 수 기준 정렬
   result.sort((a, b) => b.total - a.total)
 
-  return { data: result.slice(0, 5) }
+  return { data: result.slice(0, 10) }
 }
 
 export interface ManagerStatsData {
@@ -449,3 +449,100 @@ export async function getManagerStats(): Promise<{ data?: ManagerStatsData[]; er
   return { data: result }
 }
 
+export interface EffortStatsData {
+  totalCompleted: number
+  withEffortData: number
+  avgEstimatedFp: number
+  avgActualFp: number
+  totalActualFp: number
+  avgEstimatedMd: number
+  avgActualMd: number
+  totalActualMd: number
+}
+
+export async function getEffortStats(): Promise<{ data?: EffortStatsData; error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: '로그인이 필요합니다.' }
+  }
+
+  // 완료된 요청 중 공수 데이터가 있는 것만 조회
+  const { data: completedRequests, count: totalCompleted } = await supabase
+    .from('service_requests')
+    .select('estimated_fp, actual_fp, estimated_md, actual_md', { count: 'exact' })
+    .eq('status', 'completed')
+
+  if (!completedRequests || completedRequests.length === 0) {
+    return {
+      data: {
+        totalCompleted: 0,
+        withEffortData: 0,
+        avgEstimatedFp: 0,
+        avgActualFp: 0,
+        totalActualFp: 0,
+        avgEstimatedMd: 0,
+        avgActualMd: 0,
+        totalActualMd: 0
+      }
+    }
+  }
+
+  // 공수 데이터가 있는 요청만 필터링
+  const withEffort = completedRequests.filter(
+    r => r.estimated_fp != null || r.actual_fp != null || r.estimated_md != null || r.actual_md != null
+  )
+
+  if (withEffort.length === 0) {
+    return {
+      data: {
+        totalCompleted: totalCompleted || 0,
+        withEffortData: 0,
+        avgEstimatedFp: 0,
+        avgActualFp: 0,
+        totalActualFp: 0,
+        avgEstimatedMd: 0,
+        avgActualMd: 0,
+        totalActualMd: 0
+      }
+    }
+  }
+
+  // FP 통계 계산
+  const fpData = withEffort.filter(r => r.estimated_fp != null || r.actual_fp != null)
+  let totalEstimatedFp = 0
+  let totalActualFp = 0
+  let fpCount = 0
+
+  fpData.forEach(r => {
+    if (r.estimated_fp != null) totalEstimatedFp += r.estimated_fp
+    if (r.actual_fp != null) totalActualFp += r.actual_fp
+    if (r.estimated_fp != null || r.actual_fp != null) fpCount++
+  })
+
+  // MD 통계 계산
+  const mdData = withEffort.filter(r => r.estimated_md != null || r.actual_md != null)
+  let totalEstimatedMd = 0
+  let totalActualMd = 0
+  let mdCount = 0
+
+  mdData.forEach(r => {
+    if (r.estimated_md != null) totalEstimatedMd += r.estimated_md
+    if (r.actual_md != null) totalActualMd += r.actual_md
+    if (r.estimated_md != null || r.actual_md != null) mdCount++
+  })
+
+  return {
+    data: {
+      totalCompleted: totalCompleted || 0,
+      withEffortData: withEffort.length,
+      avgEstimatedFp: fpCount > 0 ? totalEstimatedFp / fpCount : 0,
+      avgActualFp: fpCount > 0 ? totalActualFp / fpCount : 0,
+      totalActualFp,
+      avgEstimatedMd: mdCount > 0 ? totalEstimatedMd / mdCount : 0,
+      avgActualMd: mdCount > 0 ? totalActualMd / mdCount : 0,
+      totalActualMd
+    }
+  }
+}

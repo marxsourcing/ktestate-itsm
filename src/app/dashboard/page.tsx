@@ -7,6 +7,7 @@ import { StatusDistribution } from './components/status-distribution'
 import { RecentRequests } from './components/recent-requests'
 import { TopSystems } from './components/top-systems'
 import { ManagerStats } from './components/manager-stats'
+import { EffortStats } from './components/effort-stats'
 
 export const dynamic = 'force-dynamic'
 
@@ -69,8 +70,11 @@ export default async function DashboardPage() {
           </Suspense>
         </div>
 
-        {/* Manager Stats */}
-        <div className="mt-8">
+        {/* Effort Stats & Manager Stats Row */}
+        <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <Suspense fallback={<ChartLoading title="공수 현황" />}>
+            <EffortStats />
+          </Suspense>
           <Suspense fallback={<ChartLoading title="담당자별 현황" />}>
             <ManagerStats />
           </Suspense>
