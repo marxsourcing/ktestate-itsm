@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -28,9 +28,11 @@ import { ManagerAiChat } from './manager-ai-chat'
 import { OriginalChatModal } from './original-chat-modal'
 import { SimilarCasesPanel } from './similar-cases-panel'
 import { StatusChangeModal } from './status-change-modal'
+import { DeployInfoModal, DeployInfo } from './deploy-info-modal'
+import { TestRequestModal, TestInfo } from './test-request-modal'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { assignRequest, updateRequestStatus, updateRequestStatusWithReason } from '../actions'
+import { assignRequest, updateRequestStatus, updateRequestStatusWithReason, updateRequestWithDeployInfo, getManagers, requestTest, completeTest, approveDeploy } from '../actions'
 import { toast } from 'sonner'
 
 interface AssignedRequest {
@@ -43,8 +45,14 @@ interface AssignedRequest {
   created_at: string
   completed_at?: string
   requester?: { full_name?: string; email: string }
+  manager?: { full_name?: string; email: string }
   system?: { name: string } | null
   module?: { name: string } | null
+  test_manager_id?: string | null
+  deploy_type?: string | null
+  deploy_manager_id?: string | null
+  deploy_scheduled_at?: string | null
+  deploy_completed_at?: string | null
 }
 
 interface WorkspaceRequestDetailProps {
@@ -90,6 +98,20 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
   const [hasOriginalChat, setHasOriginalChat] = useState<boolean | null>(null)
   const [statusModalType, setStatusModalType] = useState<'completed' | 'rejected' | null>(null)
   const [isStatusModalLoading, setIsStatusModalLoading] = useState(false)
+  const [isDeployModalOpen, setIsDeployModalOpen] = useState(false)
+  const [isDeployModalLoading, setIsDeployModalLoading] = useState(false)
+  const [isTestModalOpen, setIsTestModalOpen] = useState(false)
+  const [isTestModalLoading, setIsTestModalLoading] = useState(false)
+  const [managers, setManagers] = useState<{ id: string; full_name: string | null; email: string }[]>([])
+
+  // 담당자 목록 로드
+  useEffect(() => {
+    const loadManagers = async () => {
+      const result = await getManagers()
+      setManagers(result.managers)
+    }
+    loadManagers()
+  }, [])
 
   const priorityConfig = PRIORITY_CONFIG[request.priority as keyof typeof PRIORITY_CONFIG] || PRIORITY_CONFIG.medium
   const statusConfig = STATUS_CONFIG[request.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.requested
@@ -155,6 +177,101 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
       setIsStatusModalLoading(false)
     }
   }
+
+  // 배포 정보와 함께 상태 변경
+  const handleDeployRequest = async (deployInfo: DeployInfo) => {
+    setIsDeployModalLoading(true)
+    try {
+      const result = await updateRequestWithDeployInfo(request.id, 'deploy_requested', deployInfo)
+      if (result.error) {
+        toast.error(result.error)
+      } else {
+        toast.success('배포 요청이 등록되었습니다.')
+        onStatusChange?.(request.id, 'deploy_requested')
+        setIsDeployModalOpen(false)
+        router.refresh()
+      }
+    } catch {
+      toast.error('배포 요청 중 오류가 발생했습니다.')
+    } finally {
+      setIsDeployModalLoading(false)
+    }
+  }
+
+  // 테스트 요청 (본인/타인 선택)
+  const handleTestRequest = async (testInfo: TestInfo) => {
+    setIsTestModalLoading(true)
+    try {
+      const result = await requestTest(request.id, testInfo)
+      if (result.error) {
+        toast.error(result.error)
+      } else {
+        const msg = testInfo.test_manager_id
+          ? '테스트 요청이 다른 담당자에게 전달되었습니다.'
+          : '테스트 요청이 등록되었습니다. 테스트 완료 후 버튼을 눌러주세요.'
+        toast.success(msg)
+        onStatusChange?.(request.id, 'test_requested')
+        setIsTestModalOpen(false)
+        router.refresh()
+      }
+    } catch {
+      toast.error('테스트 요청 중 오류가 발생했습니다.')
+    } finally {
+      setIsTestModalLoading(false)
+    }
+  }
+
+  // 테스트 완료 처리 (권한 검증 포함)
+  const handleCompleteTest = async () => {
+    setIsUpdatingStatus(true)
+    try {
+      const result = await completeTest(request.id)
+      if (result.error) {
+        toast.error(result.error)
+      } else {
+        toast.success('테스트가 완료되었습니다.')
+        onStatusChange?.(request.id, 'test_completed')
+        router.refresh()
+      }
+    } catch {
+      toast.error('테스트 완료 처리 중 오류가 발생했습니다.')
+    } finally {
+      setIsUpdatingStatus(false)
+    }
+  }
+
+  // 배포 승인 처리 (권한 검증 포함)
+  const handleApproveDeploy = async () => {
+    setIsUpdatingStatus(true)
+    try {
+      const result = await approveDeploy(request.id)
+      if (result.error) {
+        toast.error(result.error)
+      } else {
+        toast.success('배포가 승인되었습니다.')
+        onStatusChange?.(request.id, 'deploy_approved')
+        router.refresh()
+      }
+    } catch {
+      toast.error('배포 승인 중 오류가 발생했습니다.')
+    } finally {
+      setIsUpdatingStatus(false)
+    }
+  }
+
+  // 테스트 완료 권한 체크
+  const canCompleteTest = request.status === 'test_requested' && (
+    request.test_manager_id
+      ? request.test_manager_id === currentUserId
+      : !request.manager || request.manager?.email === undefined // manager가 없거나 본인인 경우
+  )
+
+  // 배포 승인 권한 체크
+  const canApproveDeploy = request.status === 'deploy_requested' && (
+    request.deploy_manager_id
+      ? request.deploy_manager_id === currentUserId
+      : true // deploy_manager_id가 null이면 본인이 직접 처리
+  )
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -317,7 +434,7 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
           {request.status === 'processing' && (
             <>
               <Button
-                onClick={() => handleStatusUpdate('test_requested')}
+                onClick={() => setIsTestModalOpen(true)}
                 disabled={isUpdatingStatus}
                 className="w-full bg-orange-600 hover:bg-orange-700"
               >
@@ -337,14 +454,20 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
 
           {request.status === 'test_requested' && (
             <>
-              <Button
-                onClick={() => handleStatusUpdate('test_completed')}
-                disabled={isUpdatingStatus}
-                className="w-full bg-teal-600 hover:bg-teal-700"
-              >
-                <CheckSquare className="size-4 mr-2" />
-                테스트 완료
-              </Button>
+              {canCompleteTest ? (
+                <Button
+                  onClick={handleCompleteTest}
+                  disabled={isUpdatingStatus}
+                  className="w-full bg-teal-600 hover:bg-teal-700"
+                >
+                  <CheckSquare className="size-4 mr-2" />
+                  테스트 완료
+                </Button>
+              ) : (
+                <div className="text-sm text-gray-500 bg-gray-50 p-3 rounded-lg text-center">
+                  테스트 담당자가 테스트를 진행 중입니다.
+                </div>
+              )}
               <Button
                 variant="outline"
                 onClick={() => handleStatusUpdate('processing')}
@@ -360,7 +483,7 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
           {request.status === 'test_completed' && (
             <>
               <Button
-                onClick={() => handleStatusUpdate('deploy_requested')}
+                onClick={() => setIsDeployModalOpen(true)}
                 disabled={isUpdatingStatus}
                 className="w-full bg-cyan-600 hover:bg-cyan-700"
               >
@@ -381,14 +504,20 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
 
           {request.status === 'deploy_requested' && (
             <>
-              <Button
-                onClick={() => handleStatusUpdate('deploy_approved')}
-                disabled={isUpdatingStatus}
-                className="w-full bg-lime-600 hover:bg-lime-700"
-              >
-                <ShieldCheck className="size-4 mr-2" />
-                배포 승인
-              </Button>
+              {canApproveDeploy ? (
+                <Button
+                  onClick={handleApproveDeploy}
+                  disabled={isUpdatingStatus}
+                  className="w-full bg-lime-600 hover:bg-lime-700"
+                >
+                  <ShieldCheck className="size-4 mr-2" />
+                  배포 승인
+                </Button>
+              ) : (
+                <div className="text-sm text-gray-500 bg-gray-50 p-3 rounded-lg text-center">
+                  배포 승인자가 승인을 진행 중입니다.
+                </div>
+              )}
               <Button
                 variant="outline"
                 onClick={() => handleStatusUpdate('test_completed')}
@@ -483,6 +612,31 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
           isLoading={isStatusModalLoading}
         />
       )}
+
+      {/* 배포 정보 입력 모달 */}
+      <DeployInfoModal
+        open={isDeployModalOpen}
+        onOpenChange={setIsDeployModalOpen}
+        onConfirm={handleDeployRequest}
+        isLoading={isDeployModalLoading}
+        managers={managers}
+        currentUserId={currentUserId}
+        currentDeployInfo={{
+          deploy_type: request.deploy_type,
+          deploy_manager_id: request.deploy_manager_id,
+          deploy_scheduled_at: request.deploy_scheduled_at
+        }}
+      />
+
+      {/* 테스트 요청 모달 */}
+      <TestRequestModal
+        open={isTestModalOpen}
+        onOpenChange={setIsTestModalOpen}
+        onConfirm={handleTestRequest}
+        isLoading={isTestModalLoading}
+        managers={managers}
+        currentUserId={currentUserId}
+      />
     </div>
   )
 }

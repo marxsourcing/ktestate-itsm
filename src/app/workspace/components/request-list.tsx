@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { 
-  AlertTriangle, 
-  ArrowUp, 
-  Minus, 
+import {
+  AlertTriangle,
+  ArrowUp,
+  Minus,
   ArrowDown,
   Clock,
   User,
@@ -16,10 +16,14 @@ import {
   Inbox,
   CheckCircle2,
   Bot,
-  Sparkles
+  Sparkles,
+  TestTube2,
+  Rocket
 } from 'lucide-react'
 import Link from 'next/link'
 import { WorkspaceRequestDetail } from './workspace-request-detail'
+import { createClient } from '@/lib/supabase/client'
+import { useRouter } from 'next/navigation'
 
 export type AssignedRequest = {
   id: string
@@ -31,14 +35,19 @@ export type AssignedRequest = {
   created_at: string
   completed_at?: string
   requester?: { full_name?: string; email: string }
+  manager?: { full_name?: string; email: string }
   system?: { name: string } | null
   module?: { name: string } | null
+  test_manager_id?: string | null
+  deploy_manager_id?: string | null
 }
 
 interface RequestListProps {
   myRequests: AssignedRequest[]
   unassignedRequests: AssignedRequest[]
   recentCompletedRequests: AssignedRequest[]
+  testAssignedRequests?: AssignedRequest[]
+  deployAssignedRequests?: AssignedRequest[]
   currentUserId: string
 }
 
@@ -81,21 +90,117 @@ const TYPE_LABELS: Record<string, string> = {
 }
 
 export function RequestList({
-  myRequests,
-  unassignedRequests,
-  recentCompletedRequests,
+  myRequests: initialMyRequests,
+  unassignedRequests: initialUnassignedRequests,
+  recentCompletedRequests: initialRecentCompletedRequests,
+  testAssignedRequests: initialTestAssignedRequests = [],
+  deployAssignedRequests: initialDeployAssignedRequests = [],
   currentUserId
 }: RequestListProps) {
+  const router = useRouter()
+
+  // 로컬 상태로 목록 관리 (실시간 업데이트 지원)
+  const [myRequests, setMyRequests] = useState(initialMyRequests)
+  const [unassignedRequests, setUnassignedRequests] = useState(initialUnassignedRequests)
+  const [recentCompletedRequests, setRecentCompletedRequests] = useState(initialRecentCompletedRequests)
+  const [testAssignedRequests, setTestAssignedRequests] = useState(initialTestAssignedRequests)
+  const [deployAssignedRequests, setDeployAssignedRequests] = useState(initialDeployAssignedRequests)
+
   const [selectedRequest, setSelectedRequest] = useState<AssignedRequest | null>(
-    myRequests[0] || unassignedRequests[0] || null
+    initialMyRequests[0] || initialTestAssignedRequests[0] || initialDeployAssignedRequests[0] || initialUnassignedRequests[0] || null
   )
 
+  // props 변경 시 상태 동기화
+  useEffect(() => {
+    setMyRequests(initialMyRequests)
+    setUnassignedRequests(initialUnassignedRequests)
+    setRecentCompletedRequests(initialRecentCompletedRequests)
+    setTestAssignedRequests(initialTestAssignedRequests)
+    setDeployAssignedRequests(initialDeployAssignedRequests)
+  }, [initialMyRequests, initialUnassignedRequests, initialRecentCompletedRequests, initialTestAssignedRequests, initialDeployAssignedRequests])
+
+  // 요청 제거 핸들러 (위임된 작업 완료 시)
+  const handleRequestRemove = useCallback((requestId: string, listType: 'test' | 'deploy' | 'my') => {
+    if (listType === 'test') {
+      setTestAssignedRequests(prev => prev.filter(r => r.id !== requestId))
+    } else if (listType === 'deploy') {
+      setDeployAssignedRequests(prev => prev.filter(r => r.id !== requestId))
+    } else {
+      setMyRequests(prev => prev.filter(r => r.id !== requestId))
+    }
+
+    // 선택된 요청이 제거된 경우 다음 요청 선택
+    if (selectedRequest?.id === requestId) {
+      const allRequests = [...myRequests, ...testAssignedRequests, ...deployAssignedRequests, ...unassignedRequests]
+      const remaining = allRequests.filter(r => r.id !== requestId)
+      setSelectedRequest(remaining[0] || null)
+    }
+  }, [selectedRequest, myRequests, testAssignedRequests, deployAssignedRequests, unassignedRequests])
+
+  // 요청이 어느 목록에 속하는지 확인
+  const getRequestListType = useCallback((requestId: string): 'test' | 'deploy' | 'my' | null => {
+    if (testAssignedRequests.some(r => r.id === requestId)) return 'test'
+    if (deployAssignedRequests.some(r => r.id === requestId)) return 'deploy'
+    if (myRequests.some(r => r.id === requestId)) return 'my'
+    return null
+  }, [testAssignedRequests, deployAssignedRequests, myRequests])
+
   // 선택된 요청의 상태 업데이트 핸들러
-  const handleRequestStatusChange = (requestId: string, newStatus: string) => {
+  const handleRequestStatusChange = useCallback((requestId: string, newStatus: string) => {
     if (selectedRequest?.id === requestId) {
       setSelectedRequest(prev => prev ? { ...prev, status: newStatus } : null)
     }
-  }
+
+    const listType = getRequestListType(requestId)
+
+    // 상태에 따라 목록에서 제거 (테스트/배포 완료 시)
+    if (newStatus === 'test_completed' && listType === 'test') {
+      // 테스트 완료 → 테스트 요청 목록에서 제거 (위임된 경우만)
+      handleRequestRemove(requestId, 'test')
+    } else if (newStatus === 'deploy_approved' && listType === 'deploy') {
+      // 배포 승인 → 배포 요청 목록에서 제거 (위임된 경우만)
+      handleRequestRemove(requestId, 'deploy')
+    } else if (newStatus === 'completed' || newStatus === 'rejected') {
+      // 완료/반려 → 내 작업 목록에서 제거
+      if (listType === 'my') {
+        handleRequestRemove(requestId, 'my')
+      }
+    }
+  }, [selectedRequest, handleRequestRemove, getRequestListType])
+
+  // Supabase Realtime 구독 (다른 사용자의 변경 감지)
+  useEffect(() => {
+    const supabase = createClient()
+
+    const channel = supabase
+      .channel('workspace-requests')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'service_requests'
+        },
+        (payload) => {
+          const updated = payload.new as { id: string; status: string; manager_id: string; test_manager_id: string | null; deploy_manager_id: string | null }
+
+          // 현재 사용자와 관련된 요청인지 확인
+          const isMyRequest = updated.manager_id === currentUserId
+          const isMyTestRequest = updated.test_manager_id === currentUserId
+          const isMyDeployRequest = updated.deploy_manager_id === currentUserId
+
+          if (isMyRequest || isMyTestRequest || isMyDeployRequest) {
+            // 페이지 데이터 새로고침
+            router.refresh()
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [currentUserId, router])
 
   // 우선순위별 그룹핑
   const groupByPriority = (requests: AssignedRequest[]) => {
@@ -174,6 +279,54 @@ export function RequestList({
             )}
           </div>
 
+          {/* 테스트 담당 위임 요청 */}
+          {testAssignedRequests.length > 0 && (
+            <div className="p-4 border-b border-gray-100">
+              <h3 className="text-sm font-semibold text-gray-500 mb-3 flex items-center gap-2">
+                <div className="w-5 h-5 rounded bg-orange-100 flex items-center justify-center">
+                  <TestTube2 className="size-3 text-orange-600" />
+                </div>
+                테스트 요청 ({testAssignedRequests.length})
+              </h3>
+              <div className="space-y-2">
+                {testAssignedRequests.map(request => (
+                  <RequestItem
+                    key={request.id}
+                    request={request}
+                    isSelected={selectedRequest?.id === request.id}
+                    onClick={() => setSelectedRequest(request)}
+                    priority={request.priority as keyof typeof PRIORITY_CONFIG}
+                    delegationType="test"
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 배포 승인 위임 요청 */}
+          {deployAssignedRequests.length > 0 && (
+            <div className="p-4 border-b border-gray-100">
+              <h3 className="text-sm font-semibold text-gray-500 mb-3 flex items-center gap-2">
+                <div className="w-5 h-5 rounded bg-cyan-100 flex items-center justify-center">
+                  <Rocket className="size-3 text-cyan-600" />
+                </div>
+                배포 승인 요청 ({deployAssignedRequests.length})
+              </h3>
+              <div className="space-y-2">
+                {deployAssignedRequests.map(request => (
+                  <RequestItem
+                    key={request.id}
+                    request={request}
+                    isSelected={selectedRequest?.id === request.id}
+                    onClick={() => setSelectedRequest(request)}
+                    priority={request.priority as keyof typeof PRIORITY_CONFIG}
+                    delegationType="deploy"
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Unassigned Requests */}
           {unassignedRequests.length > 0 && (
             <div className="p-4 border-b border-gray-100">
@@ -195,7 +348,7 @@ export function RequestList({
                   />
                 ))}
                 {unassignedRequests.length > 5 && (
-                  <Link 
+                  <Link
                     href="/requests"
                     className="block text-center text-sm text-gray-500 hover:text-gray-700 py-2"
                   >
@@ -255,6 +408,7 @@ function RequestItem({
   priority,
   showAssignButton = false,
   completed = false,
+  delegationType,
 }: {
   request: AssignedRequest
   isSelected: boolean
@@ -262,6 +416,7 @@ function RequestItem({
   priority: keyof typeof PRIORITY_CONFIG
   showAssignButton?: boolean
   completed?: boolean
+  delegationType?: 'test' | 'deploy'
 }) {
   const config = PRIORITY_CONFIG[priority] || PRIORITY_CONFIG.medium
   const [timeAgo, setTimeAgo] = useState<string>('')
@@ -271,6 +426,16 @@ function RequestItem({
     setTimeAgo(getTimeAgo(request.created_at))
   }, [request.created_at])
 
+  // 위임 타입에 따른 스타일
+  const delegationStyles = {
+    test: { bg: 'bg-orange-50', border: 'border-orange-300', text: 'text-orange-900' },
+    deploy: { bg: 'bg-cyan-50', border: 'border-cyan-300', text: 'text-cyan-900' },
+  }
+
+  const selectedStyle = delegationType
+    ? delegationStyles[delegationType]
+    : { bg: 'bg-indigo-50', border: 'border-indigo-300', text: 'text-indigo-900' }
+
   return (
     <button
       onClick={onClick}
@@ -278,7 +443,7 @@ function RequestItem({
         'w-full text-left p-3 rounded-xl border transition-all',
         'hover:shadow-md hover:-translate-y-0.5',
         isSelected
-          ? 'bg-indigo-50 border-indigo-300 shadow-sm'
+          ? `${selectedStyle.bg} ${selectedStyle.border} shadow-sm`
           : 'bg-white border-gray-200 hover:border-gray-300',
         completed && 'opacity-60'
       )}
@@ -286,12 +451,12 @@ function RequestItem({
       <div className="flex items-start gap-3">
         {/* Priority Dot */}
         <div className={cn('w-2 h-2 rounded-full mt-2 flex-shrink-0', config.dotColor)} />
-        
+
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2 mb-1">
             <h4 className={cn(
               'font-medium text-sm line-clamp-1',
-              isSelected ? 'text-indigo-900' : 'text-gray-900'
+              isSelected ? selectedStyle.text : 'text-gray-900'
             )}>
               {request.title}
             </h4>
@@ -306,6 +471,19 @@ function RequestItem({
           </p>
 
           <div className="flex items-center gap-2 flex-wrap">
+            {/* 위임 타입 배지 */}
+            {delegationType === 'test' && (
+              <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-700">
+                <TestTube2 className="size-3" />
+                테스트 요청
+              </span>
+            )}
+            {delegationType === 'deploy' && (
+              <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-cyan-100 text-cyan-700">
+                <Rocket className="size-3" />
+                배포 승인
+              </span>
+            )}
             <span className={cn(
               'inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded',
               config.color
@@ -319,7 +497,15 @@ function RequestItem({
               <Clock className="size-3" />
               {timeAgo}
             </span>
-            {request.requester && (
+            {/* 위임 요청의 경우 요청 담당자 표시 */}
+            {delegationType && request.manager && (
+              <span className="text-[10px] text-gray-400 flex items-center gap-1">
+                <User className="size-3" />
+                from: {request.manager.full_name || request.manager.email?.split('@')[0]}
+              </span>
+            )}
+            {/* 일반 요청의 경우 요청자 표시 */}
+            {!delegationType && request.requester && (
               <span className="text-[10px] text-gray-400 flex items-center gap-1">
                 <User className="size-3" />
                 {request.requester.full_name || request.requester.email?.split('@')[0]}
