@@ -80,9 +80,21 @@ export async function updateRequestStatus(requestId: string, newStatus: string) 
   const previousStatus = request.status
 
   // 상태 업데이트
-  const updateData: { status: string; completed_at?: string } = { status: newStatus }
+  const updateData: {
+    status: string
+    completed_at?: string
+    deploy_batch_id?: null
+    deploy_batch_name?: null
+  } = { status: newStatus }
+
   if (newStatus === 'completed') {
     updateData.completed_at = new Date().toISOString()
+  }
+
+  // 배포 요청 상태에서 테스트 완료로 되돌릴 때 배포 그룹 정보 초기화
+  if (previousStatus === 'deploy_requested' && newStatus === 'test_completed') {
+    updateData.deploy_batch_id = null
+    updateData.deploy_batch_name = null
   }
 
   const { error } = await supabase
@@ -550,11 +562,13 @@ export async function approveDeploy(requestId: string) {
 
   const previousStatus = request.status
 
-  // 배포 승인 처리
+  // 배포 승인 처리 (개별 승인 시 배포 그룹에서 제외)
   const { error } = await supabase
     .from('service_requests')
     .update({
       status: 'deploy_approved',
+      deploy_batch_id: null,
+      deploy_batch_name: null,
     })
     .eq('id', requestId)
 
@@ -570,7 +584,7 @@ export async function approveDeploy(requestId: string) {
     action: 'status_change',
     previous_status: previousStatus,
     new_status: 'deploy_approved',
-    note: '배포 승인',
+    note: '배포 승인 (개별)',
   })
 
   revalidatePath('/workspace')
@@ -745,4 +759,222 @@ export async function getCategories() {
     categoriesLv1: lv1Data || [],
     categoriesLv2: lv2Data || []
   }
+}
+
+// ========== 일괄 배포(통합 배포) 기능 ==========
+
+// 일괄 배포 요청
+export async function requestBatchDeploy(
+  requestIds: string[],
+  deployInfo: {
+    deploy_batch_name: string
+    deploy_type: 'scheduled' | 'unscheduled'
+    deploy_manager_id: string | null
+    deploy_scheduled_at: string
+  }
+) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: '로그인이 필요합니다.' }
+  }
+
+  if (requestIds.length === 0) {
+    return { error: '배포할 요청을 선택해주세요.' }
+  }
+
+  // 배포 그룹 ID 생성
+  const deployBatchId = crypto.randomUUID()
+
+  // 선택된 요청들의 현재 상태 확인
+  const { data: requests, error: fetchError } = await supabase
+    .from('service_requests')
+    .select('id, status, title, manager_id')
+    .in('id', requestIds)
+
+  if (fetchError || !requests) {
+    console.error('요청 조회 오류:', fetchError)
+    return { error: '요청 조회 중 오류가 발생했습니다.' }
+  }
+
+  // 모든 요청이 test_completed 상태인지 확인
+  const invalidRequests = requests.filter(r => r.status !== 'test_completed')
+  if (invalidRequests.length > 0) {
+    const titles = invalidRequests.map(r => r.title).join(', ')
+    return { error: `테스트가 완료되지 않은 요청이 있습니다: ${titles}` }
+  }
+
+  // 권한 확인: 현재 사용자가 모든 요청의 담당자인지
+  const unauthorizedRequests = requests.filter(r => r.manager_id !== user.id)
+  if (unauthorizedRequests.length > 0) {
+    const titles = unauthorizedRequests.map(r => r.title).join(', ')
+    return { error: `담당자가 아닌 요청이 있습니다: ${titles}` }
+  }
+
+  // deploy_manager_id가 null이면 본인이 직접 처리
+  const effectiveDeployManagerId = deployInfo.deploy_manager_id ?? user.id
+
+  // 일괄 업데이트
+  const { error: updateError } = await supabase
+    .from('service_requests')
+    .update({
+      status: 'deploy_requested',
+      deploy_batch_id: deployBatchId,
+      deploy_batch_name: deployInfo.deploy_batch_name,
+      deploy_type: deployInfo.deploy_type,
+      deploy_manager_id: effectiveDeployManagerId,
+      deploy_scheduled_at: deployInfo.deploy_scheduled_at,
+    })
+    .in('id', requestIds)
+
+  if (updateError) {
+    console.error('일괄 배포 요청 오류:', updateError)
+    return { error: '일괄 배포 요청 중 오류가 발생했습니다.' }
+  }
+
+  // 배포 담당자 이름 조회
+  const { data: deployManager } = await supabase
+    .from('profiles')
+    .select('full_name, email')
+    .eq('id', effectiveDeployManagerId)
+    .single()
+
+  const deployManagerName = deployManager?.full_name || deployManager?.email || '알 수 없음'
+  const deployTypeLabel = deployInfo.deploy_type === 'scheduled' ? '정기' : '비정기'
+  const scheduledDate = new Date(deployInfo.deploy_scheduled_at).toLocaleDateString('ko-KR', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+
+  // 각 요청에 대해 히스토리 기록
+  const historyInserts = requests.map(r => ({
+    request_id: r.id,
+    actor_id: user.id,
+    action: 'status_change',
+    previous_status: 'test_completed',
+    new_status: 'deploy_requested',
+    note: `일괄 배포 요청: ${deployInfo.deploy_batch_name} (${deployTypeLabel} 배포, 담당자: ${deployManagerName}, 예정일: ${scheduledDate})`,
+  }))
+
+  await supabase.from('sr_history').insert(historyInserts)
+
+  revalidatePath('/workspace')
+  revalidatePath('/requests')
+
+  return {
+    success: true,
+    deployBatchId,
+    message: `${requests.length}개 요청이 일괄 배포 요청되었습니다.`
+  }
+}
+
+// 일괄 배포 승인
+export async function approveBatchDeploy(deployBatchId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: '로그인이 필요합니다.' }
+  }
+
+  // 해당 배포 그룹의 요청들 조회
+  const { data: requests, error: fetchError } = await supabase
+    .from('service_requests')
+    .select('id, status, deploy_manager_id, deploy_batch_name')
+    .eq('deploy_batch_id', deployBatchId)
+
+  if (fetchError || !requests || requests.length === 0) {
+    console.error('배포 그룹 조회 오류:', fetchError)
+    return { error: '배포 그룹을 찾을 수 없습니다.' }
+  }
+
+  // 권한 확인: 현재 사용자가 배포 담당자인지
+  const unauthorizedRequests = requests.filter(r => r.deploy_manager_id !== user.id)
+  if (unauthorizedRequests.length > 0) {
+    return { error: '일괄 배포 승인 권한이 없습니다.' }
+  }
+
+  // 모든 요청이 deploy_requested 상태인지 확인
+  const invalidRequests = requests.filter(r => r.status !== 'deploy_requested')
+  if (invalidRequests.length > 0) {
+    return { error: '배포 요청 상태가 아닌 요청이 포함되어 있습니다.' }
+  }
+
+  const deployBatchName = requests[0].deploy_batch_name || '일괄 배포'
+
+  // 일괄 배포 승인 처리
+  const { error: updateError } = await supabase
+    .from('service_requests')
+    .update({
+      status: 'deploy_approved',
+    })
+    .eq('deploy_batch_id', deployBatchId)
+
+  if (updateError) {
+    console.error('일괄 배포 승인 오류:', updateError)
+    return { error: '일괄 배포 승인 중 오류가 발생했습니다.' }
+  }
+
+  // 히스토리 기록
+  const historyInserts = requests.map(r => ({
+    request_id: r.id,
+    actor_id: user.id,
+    action: 'status_change',
+    previous_status: 'deploy_requested',
+    new_status: 'deploy_approved',
+    note: `일괄 배포 승인: ${deployBatchName}`,
+  }))
+
+  await supabase.from('sr_history').insert(historyInserts)
+
+  revalidatePath('/workspace')
+  revalidatePath('/requests')
+
+  return {
+    success: true,
+    message: `${requests.length}개 요청이 일괄 배포 승인되었습니다.`
+  }
+}
+
+// 배포 그룹에 속한 요청 목록 조회
+export async function getBatchDeployRequests(deployBatchId: string) {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('service_requests')
+    .select(`
+      id, title, status, priority,
+      system:systems(name),
+      module:system_modules(name)
+    `)
+    .eq('deploy_batch_id', deployBatchId)
+    .order('created_at')
+
+  if (error) {
+    console.error('배포 그룹 요청 조회 오류:', error)
+    return { requests: [] as Array<{
+      id: string
+      title: string
+      status: string
+      priority: string
+      system: { name: string } | null
+      module: { name: string } | null
+    }> }
+  }
+
+  // Supabase 반환 타입 정리 (배열을 단일 객체로 변환)
+  const requests = (data || []).map(item => ({
+    id: item.id,
+    title: item.title,
+    status: item.status,
+    priority: item.priority,
+    system: Array.isArray(item.system) ? item.system[0] || null : item.system,
+    module: Array.isArray(item.module) ? item.module[0] || null : item.module,
+  }))
+
+  return { requests }
 }
