@@ -20,7 +20,6 @@ export function ChatArea({ conversationId, initialMessages, conversationStatus, 
   const [messages, setMessages] = useState<Message[]>(initialMessages)
   const [isLoading, setIsLoading] = useState(false)
   const initialMessageSentRef = useRef(false)
-  const sendMessageRef = useRef<((content: string, attachments?: AttachmentData[]) => Promise<void>) | null>(null)
 
   // 실시간 메시지 구독
   useEffect(() => {
@@ -52,15 +51,6 @@ export function ChatArea({ conversationId, initialMessages, conversationStatus, 
     }
   }, [conversationId])
 
-  // URL에서 초기 메시지 확인 및 전송
-  useEffect(() => {
-    const initialMessage = searchParams.get('message')
-    if (initialMessage && !initialMessageSentRef.current && messages.length === 0 && sendMessageRef.current) {
-      initialMessageSentRef.current = true
-      sendMessageRef.current(initialMessage)
-    }
-  }, [searchParams, messages.length])
-
   const sendMessage = useCallback(async (content: string, attachments?: AttachmentData[]) => {
     if (conversationStatus === 'confirmed') return
 
@@ -84,8 +74,8 @@ export function ChatArea({ conversationId, initialMessages, conversationStatus, 
         await updateConversationTitle(conversationId, title)
       }
 
-      // AI 응답 요청 (스트리밍)
-      const response = await fetch('/api/chat/stream', {
+      // AI 응답 요청 (일반 JSON 방식 - 배포 환경 안정성 확보)
+      const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -96,7 +86,7 @@ export function ChatArea({ conversationId, initialMessages, conversationStatus, 
             file_name: a.file_name,
             file_type: a.file_type,
             file_size: a.file_size,
-            url: a.url  // 이미지 URL 전달 (AI가 분석할 수 있도록)
+            url: a.url
           }))
         }),
       })
@@ -105,77 +95,32 @@ export function ChatArea({ conversationId, initialMessages, conversationStatus, 
         throw new Error('AI 응답 실패')
       }
 
-      // 스트리밍 응답 처리
-      const reader = response.body?.getReader()
-      const decoder = new TextDecoder()
-      
-      // 스트리밍용 임시 메시지
-      const streamingMessageId = `streaming-${Date.now()}`
-      let streamedContent = ''
-      let streamedMetadata: Record<string, unknown> | undefined
+      const data = await response.json()
+      const aiContent = data.content || ''
+      const aiMetadata = data.metadata || {}
 
-      // 스트리밍 메시지 추가
+      // AI 메시지 추가 (로컬 상태)
+      const tempAiMessageId = `ai-${Date.now()}`
       setMessages((prev) => [...prev, {
-        id: streamingMessageId,
-        role: 'assistant' as const,
-        content: '',
+        id: tempAiMessageId,
+        role: 'assistant',
+        content: aiContent,
+        metadata: aiMetadata,
         created_at: new Date().toISOString(),
       }])
 
-      if (reader) {
-        let buffer = ''
-        
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-
-          buffer += decoder.decode(value, { stream: true })
-          const lines = buffer.split('\n')
-          buffer = lines.pop() || ''
-
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const data = line.slice(6)
-              if (data === '[DONE]') continue
-
-              try {
-                const parsed = JSON.parse(data)
-                if (parsed.type === 'content') {
-                  streamedContent += parsed.data
-                  // 메시지 업데이트
-                  setMessages((prev) => prev.map(m => 
-                    m.id === streamingMessageId 
-                      ? { ...m, content: streamedContent }
-                      : m
-                  ))
-                } else if (parsed.type === 'metadata') {
-                  streamedMetadata = parsed.data
-                }
-              } catch (e) {
-                // JSON 파싱 실패 무시
-              }
-            }
-          }
-        }
-      }
-
-      // 요구사항 카드 마크다운 제거 (화면에서)
-      const cleanContent = streamedContent.replace(/```requirement[\s\S]*?```/g, '').trim()
-      
       // 최종 메시지를 DB에 저장
       const aiResult = await addMessage(
         conversationId,
         'assistant',
-        cleanContent,
-        streamedMetadata
+        aiContent,
+        aiMetadata
       )
 
-      // 스트리밍 메시지를 실제 메시지로 교체
+      // 임시 ID를 실제 DB ID로 교체
       if (aiResult.message) {
         setMessages((prev) => prev.map(m => 
-          m.id === streamingMessageId 
-            ? { ...(aiResult.message as Message), content: cleanContent }
-            : m
+          m.id === tempAiMessageId ? (aiResult.message as Message) : m
         ))
       }
     } catch (error) {
@@ -192,11 +137,16 @@ export function ChatArea({ conversationId, initialMessages, conversationStatus, 
     }
   }, [conversationId, messages, conversationStatus])
 
-  // sendMessage ref 업데이트
+  // URL에서 초기 메시지 확인 및 전송 (함수 준비 시점 최적화)
   useEffect(() => {
-    sendMessageRef.current = sendMessage
-  }, [sendMessage])
+    const initialMessage = searchParams.get('message')
+    if (initialMessage && !initialMessageSentRef.current && messages.length === 0) {
+      initialMessageSentRef.current = true
+      sendMessage(initialMessage)
+    }
+  }, [searchParams, messages.length, sendMessage])
 
+  // 요구사항 카드 편집 핸들러
   const handleRequirementUpdate = useCallback(async (data: RequirementData) => {
     // 마지막 요구사항 카드가 있는 메시지 찾기
     const lastCardMessage = messages.findLast((m) => m.metadata?.requirementCard)
@@ -221,8 +171,8 @@ export function ChatArea({ conversationId, initialMessages, conversationStatus, 
       return updated
     })
 
-    // DB 업데이트 (스트리밍 메시지가 아닌 경우에만)
-    if (!messageId.startsWith('streaming-') && !messageId.startsWith('error-')) {
+    // DB 업데이트
+    if (!messageId.startsWith('ai-') && !messageId.startsWith('error-')) {
       const result = await updateMessageMetadata(messageId, updatedMetadata)
       if (result.error) {
         console.error('메타데이터 저장 실패:', result.error)

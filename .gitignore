@@ -48,3 +48,6 @@ CLAUDE.md
 #documents
 /docs
 /manager
+
+#cursor
+/.cursor
