@@ -11,17 +11,23 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { User, Clock, CheckCircle, XCircle, AlertCircle, Loader2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { User, Clock, CheckCircle, XCircle, AlertCircle, Loader2, ArrowRight } from 'lucide-react'
+import Link from 'next/link'
+
+const MAX_DISPLAY = 5 // 대시보드에서 보여줄 최대 담당자 수
 
 export function ManagerStats() {
   const [data, setData] = useState<ManagerStatsData[]>([])
+  const [totalCount, setTotalCount] = useState(0)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function fetchData() {
       const result = await getManagerStats()
       if (result.data) {
-        setData(result.data)
+        setTotalCount(result.data.length)
+        setData(result.data.slice(0, MAX_DISPLAY)) // 상위 5명만 표시
       }
       setLoading(false)
     }
@@ -57,7 +63,19 @@ export function ManagerStats() {
     <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-gray-900">담당자별 현황</h3>
-        <span className="text-sm text-gray-500">{data.length}명</span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-gray-500">
+            {totalCount > MAX_DISPLAY ? `상위 ${MAX_DISPLAY}명` : `${totalCount}명`}
+          </span>
+          {totalCount > MAX_DISPLAY && (
+            <Button variant="ghost" size="sm" asChild className="text-blue-600 hover:text-blue-700 h-auto p-0">
+              <Link href="/admin/managers" className="flex items-center gap-1">
+                전체 보기
+                <ArrowRight className="size-3" />
+              </Link>
+            </Button>
+          )}
+        </div>
       </div>
       <div className="overflow-x-auto">
         <Table>

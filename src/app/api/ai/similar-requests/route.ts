@@ -6,10 +6,11 @@ interface SimilarRequest {
   title: string
   description: string
   status: string
-  type: string
   system_name: string | null
   created_at: string
   similarity: number
+  category_lv1_name?: string | null
+  category_lv2_name?: string | null
 }
 
 export async function POST(request: NextRequest) {
@@ -44,9 +45,10 @@ export async function POST(request: NextRequest) {
         title,
         description,
         status,
-        type,
         created_at,
-        systems:system_id (name)
+        systems:system_id (name),
+        category_lv1:request_categories_lv1 (name),
+        category_lv2:request_categories_lv2 (name)
       `)
       .order('created_at', { ascending: false })
       .limit(50)
@@ -84,17 +86,26 @@ export async function POST(request: NextRequest) {
       const similarity = calculateSimilarity(keywords, reqText)
 
       if (similarity >= 30) { // 30% 이상 유사도
+        const systemData = req.systems as { name: string } | null | { name: string }[]
+        const categoryLv1 = req.category_lv1 as { name: string } | null | { name: string }[]
+        const categoryLv2 = req.category_lv2 as { name: string } | null | { name: string }[]
+
         similarRequests.push({
           id: req.id,
           title: req.title,
           description: req.description?.slice(0, 200) || '',
           status: req.status,
-          type: req.type,
-          system_name: (req.systems as { name: string } | null | { name: string }[])
-            ? (Array.isArray(req.systems) ? req.systems[0]?.name : (req.systems as { name: string })?.name) || null
+          system_name: systemData
+            ? (Array.isArray(systemData) ? systemData[0]?.name : systemData?.name) || null
             : null,
           created_at: req.created_at,
-          similarity: Math.round(similarity)
+          similarity: Math.round(similarity),
+          category_lv1_name: categoryLv1
+            ? (Array.isArray(categoryLv1) ? categoryLv1[0]?.name : categoryLv1?.name) || null
+            : null,
+          category_lv2_name: categoryLv2
+            ? (Array.isArray(categoryLv2) ? categoryLv2[0]?.name : categoryLv2?.name) || null
+            : null,
         })
       }
     }

@@ -11,10 +11,11 @@ interface SimilarRequest {
   title: string
   description: string
   status: string
-  type: string
   system_name: string | null
   created_at: string
   similarity: number
+  category_lv1_name?: string | null  // 대분류 (SR 구분)
+  category_lv2_name?: string | null  // 소분류 (SR 상세 구분)
 }
 
 interface DuplicateAlertProps {
@@ -32,12 +33,6 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   rejected: { label: '반려', color: 'bg-red-100 text-red-700' },
 }
 
-const TYPE_LABELS: Record<string, string> = {
-  feature_add: '기능추가',
-  feature_improve: '기능개선',
-  bug_fix: '버그수정',
-  other: '기타',
-}
 
 export function DuplicateAlert({
   similarRequests,
@@ -148,9 +143,13 @@ export function DuplicateAlert({
                     )}>
                       {STATUS_LABELS[req.status]?.label || req.status}
                     </span>
-                    <span className="text-xs text-gray-500">
-                      {TYPE_LABELS[req.type] || req.type}
-                    </span>
+                    {/* SR 구분 (대분류/소분류) */}
+                    {req.category_lv1_name && (
+                      <span className="text-xs text-rose-600">
+                        {req.category_lv1_name}
+                        {req.category_lv2_name && ` / ${req.category_lv2_name}`}
+                      </span>
+                    )}
                   </div>
                   <h4 className="font-medium text-gray-900 mt-1.5 truncate">
                     {req.title}

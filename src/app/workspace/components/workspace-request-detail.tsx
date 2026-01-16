@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -14,15 +14,30 @@ import {
   FileText,
   AlertTriangle,
   Link as LinkIcon,
-  Eye
+  Eye,
+  ThumbsUp,
+  Users,
+  ClipboardCheck,
+  TestTube2,
+  CheckSquare,
+  Rocket,
+  ShieldCheck,
+  ArrowRight,
+  Calculator,
+  Pencil,
+  Package,
+  Loader2
 } from 'lucide-react'
 import { ManagerAiChat } from './manager-ai-chat'
 import { OriginalChatModal } from './original-chat-modal'
 import { SimilarCasesPanel } from './similar-cases-panel'
 import { StatusChangeModal } from './status-change-modal'
+import { DeployInfoModal, DeployInfo } from './deploy-info-modal'
+import { TestRequestModal, TestInfo } from './test-request-modal'
+import { RequestEditModal } from './request-edit-modal'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { assignRequest, updateRequestStatus, updateRequestStatusWithReason } from '../actions'
+import { assignRequest, updateRequestStatus, updateRequestStatusWithReason, updateRequestWithDeployInfo, getManagers, requestTest, completeTest, approveDeploy, approveBatchDeploy, getBatchDeployRequests } from '../actions'
 import { toast } from 'sonner'
 
 interface AssignedRequest {
@@ -31,17 +46,38 @@ interface AssignedRequest {
   description: string
   status: string
   priority: string
-  type: string
   created_at: string
   completed_at?: string
   requester?: { full_name?: string; email: string }
-  system?: { name: string } | null
+  manager?: { full_name?: string; email: string }
+  manager_id?: string | null
+  system?: { id: string; name: string } | null
+  module?: { id: string; name: string } | null
+  system_id?: string | null
+  module_id?: string | null
+  category_lv1?: { id: string; name: string } | null  // 대분류 (SR 구분)
+  category_lv2?: { id: string; name: string } | null  // 소분류 (SR 상세 구분)
+  category_lv1_id?: string | null
+  category_lv2_id?: string | null
+  test_manager_id?: string | null
+  deploy_type?: string | null
+  deploy_manager_id?: string | null
+  deploy_scheduled_at?: string | null
+  deploy_completed_at?: string | null
+  // 일괄 배포 관련 필드
+  deploy_batch_id?: string | null
+  deploy_batch_name?: string | null
+  // 공수 관리 필드
+  estimated_fp?: number | null
+  actual_fp?: number | null
+  estimated_md?: number | null
+  actual_md?: number | null
 }
 
 interface WorkspaceRequestDetailProps {
   request: AssignedRequest
   currentUserId: string
-  onStatusChange?: (requestId: string, newStatus: string) => void
+  onStatusChange?: (requestId: string, newStatus: string, previousStatus?: string) => void
 }
 
 const PRIORITY_CONFIG = {
@@ -52,19 +88,20 @@ const PRIORITY_CONFIG = {
 }
 
 const STATUS_CONFIG = {
+  draft: { label: '작성중', color: 'bg-gray-100 text-gray-600' },
   requested: { label: '요청', color: 'bg-amber-100 text-amber-700' },
-  reviewing: { label: '검토중', color: 'bg-blue-100 text-blue-700' },
+  approved: { label: '승인', color: 'bg-sky-100 text-sky-700' },
+  consulting: { label: '실무협의', color: 'bg-indigo-100 text-indigo-700' },
+  accepted: { label: '접수', color: 'bg-blue-100 text-blue-700' },
   processing: { label: '처리중', color: 'bg-violet-100 text-violet-700' },
+  test_requested: { label: '테스트요청', color: 'bg-orange-100 text-orange-700' },
+  test_completed: { label: '테스트완료', color: 'bg-teal-100 text-teal-700' },
+  deploy_requested: { label: '배포요청', color: 'bg-cyan-100 text-cyan-700' },
+  deploy_approved: { label: '배포승인', color: 'bg-lime-100 text-lime-700' },
   completed: { label: '완료', color: 'bg-emerald-100 text-emerald-700' },
   rejected: { label: '반려', color: 'bg-red-100 text-red-700' },
 }
 
-const TYPE_LABELS: Record<string, string> = {
-  feature_add: '기능추가',
-  feature_improve: '기능개선',
-  bug_fix: '버그수정',
-  other: '기타',
-}
 
 export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange }: WorkspaceRequestDetailProps) {
   const router = useRouter()
@@ -74,6 +111,52 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
   const [hasOriginalChat, setHasOriginalChat] = useState<boolean | null>(null)
   const [statusModalType, setStatusModalType] = useState<'completed' | 'rejected' | null>(null)
   const [isStatusModalLoading, setIsStatusModalLoading] = useState(false)
+  const [isDeployModalOpen, setIsDeployModalOpen] = useState(false)
+  const [isDeployModalLoading, setIsDeployModalLoading] = useState(false)
+  const [isTestModalOpen, setIsTestModalOpen] = useState(false)
+  const [isTestModalLoading, setIsTestModalLoading] = useState(false)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [managers, setManagers] = useState<{ id: string; full_name: string | null; email: string }[]>([])
+  // 일괄 배포 관련 상태
+  const [batchRequests, setBatchRequests] = useState<Array<{
+    id: string
+    title: string
+    status: string
+    priority: string
+    system?: { name: string } | null
+    module?: { name: string } | null
+  }>>([])
+  const [isBatchDeployLoading, setIsBatchDeployLoading] = useState(false)
+  const [isLoadingBatchRequests, setIsLoadingBatchRequests] = useState(false)
+
+  // 담당자 목록 로드
+  useEffect(() => {
+    const loadManagers = async () => {
+      const result = await getManagers()
+      setManagers(result.managers)
+    }
+    loadManagers()
+  }, [])
+
+  // 배포 그룹 요청 목록 로드 (요청이 변경될 때마다 최신 데이터 로드)
+  useEffect(() => {
+    const loadBatchRequests = async () => {
+      if (request.deploy_batch_id) {
+        setIsLoadingBatchRequests(true)
+        try {
+          const result = await getBatchDeployRequests(request.deploy_batch_id)
+          setBatchRequests(result.requests)
+        } catch (error) {
+          console.error('배포 그룹 요청 조회 오류:', error)
+        } finally {
+          setIsLoadingBatchRequests(false)
+        }
+      } else {
+        setBatchRequests([])
+      }
+    }
+    loadBatchRequests()
+  }, [request.deploy_batch_id, request.id])
 
   const priorityConfig = PRIORITY_CONFIG[request.priority as keyof typeof PRIORITY_CONFIG] || PRIORITY_CONFIG.medium
   const statusConfig = STATUS_CONFIG[request.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.requested
@@ -100,14 +183,15 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
 
   const handleStatusUpdate = async (newStatus: string) => {
     setIsUpdatingStatus(true)
+    const previousStatus = request.status // 현재 상태를 저장
     try {
       const result = await updateRequestStatus(request.id, newStatus)
       if (result.error) {
         toast.error(result.error)
       } else {
         toast.success(`상태가 ${STATUS_CONFIG[newStatus as keyof typeof STATUS_CONFIG]?.label || newStatus}로 변경되었습니다.`)
-        // 로컬 상태 즉시 업데이트
-        onStatusChange?.(request.id, newStatus)
+        // 로컬 상태 즉시 업데이트 (이전 상태 전달)
+        onStatusChange?.(request.id, newStatus, previousStatus)
         router.refresh()
       }
     } catch {
@@ -118,12 +202,12 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
   }
 
   // 모달을 통한 상태 변경 (완료/반려)
-  const handleStatusWithReason = async (reason: string) => {
+  const handleStatusWithReason = async (reason: string, effort?: { estimated_fp?: number | null; actual_fp?: number | null; estimated_md?: number | null; actual_md?: number | null }) => {
     if (!statusModalType) return
 
     setIsStatusModalLoading(true)
     try {
-      const result = await updateRequestStatusWithReason(request.id, statusModalType, reason)
+      const result = await updateRequestStatusWithReason(request.id, statusModalType, reason, effort)
       if (result.error) {
         toast.error(result.error)
       } else {
@@ -139,6 +223,124 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
       setIsStatusModalLoading(false)
     }
   }
+
+  // 배포 정보와 함께 상태 변경
+  const handleDeployRequest = async (deployInfo: DeployInfo) => {
+    setIsDeployModalLoading(true)
+    try {
+      const result = await updateRequestWithDeployInfo(request.id, 'deploy_requested', deployInfo)
+      if (result.error) {
+        toast.error(result.error)
+      } else {
+        toast.success('배포 요청이 등록되었습니다.')
+        onStatusChange?.(request.id, 'deploy_requested')
+        setIsDeployModalOpen(false)
+        router.refresh()
+      }
+    } catch {
+      toast.error('배포 요청 중 오류가 발생했습니다.')
+    } finally {
+      setIsDeployModalLoading(false)
+    }
+  }
+
+  // 테스트 요청 (본인/타인 선택)
+  const handleTestRequest = async (testInfo: TestInfo) => {
+    setIsTestModalLoading(true)
+    try {
+      const result = await requestTest(request.id, testInfo)
+      if (result.error) {
+        toast.error(result.error)
+      } else {
+        const msg = testInfo.test_manager_id
+          ? '테스트 요청이 다른 담당자에게 전달되었습니다.'
+          : '테스트 요청이 등록되었습니다. 테스트 완료 후 버튼을 눌러주세요.'
+        toast.success(msg)
+        onStatusChange?.(request.id, 'test_requested')
+        setIsTestModalOpen(false)
+        router.refresh()
+      }
+    } catch {
+      toast.error('테스트 요청 중 오류가 발생했습니다.')
+    } finally {
+      setIsTestModalLoading(false)
+    }
+  }
+
+  // 테스트 완료 처리 (권한 검증 포함)
+  const handleCompleteTest = async () => {
+    setIsUpdatingStatus(true)
+    try {
+      const result = await completeTest(request.id)
+      if (result.error) {
+        toast.error(result.error)
+      } else {
+        toast.success('테스트가 완료되었습니다.')
+        onStatusChange?.(request.id, 'test_completed')
+        router.refresh()
+      }
+    } catch {
+      toast.error('테스트 완료 처리 중 오류가 발생했습니다.')
+    } finally {
+      setIsUpdatingStatus(false)
+    }
+  }
+
+  // 배포 승인 처리 (권한 검증 포함) - 개별 승인 시 배포 그룹에서 제외
+  const handleApproveDeploy = async () => {
+    setIsUpdatingStatus(true)
+    const previousStatus = request.status
+    try {
+      const result = await approveDeploy(request.id)
+      if (result.error) {
+        toast.error(result.error)
+      } else {
+        toast.success('배포가 승인되었습니다.')
+        // 개별 승인 시 배포 그룹에서 제외되므로 previousStatus 전달
+        onStatusChange?.(request.id, 'deploy_approved', previousStatus)
+        router.refresh()
+      }
+    } catch {
+      toast.error('배포 승인 중 오류가 발생했습니다.')
+    } finally {
+      setIsUpdatingStatus(false)
+    }
+  }
+
+  // 일괄 배포 승인 처리
+  const handleApproveBatchDeploy = async () => {
+    if (!request.deploy_batch_id) return
+
+    setIsBatchDeployLoading(true)
+    try {
+      const result = await approveBatchDeploy(request.deploy_batch_id)
+      if (result.error) {
+        toast.error(result.error)
+      } else {
+        toast.success(result.message)
+        onStatusChange?.(request.id, 'deploy_approved')
+        router.refresh()
+      }
+    } catch {
+      toast.error('일괄 배포 승인 중 오류가 발생했습니다.')
+    } finally {
+      setIsBatchDeployLoading(false)
+    }
+  }
+
+  // 테스트 완료 권한 체크
+  const canCompleteTest = request.status === 'test_requested' && (
+    request.test_manager_id
+      ? request.test_manager_id === currentUserId
+      : !request.manager || request.manager?.email === undefined // manager가 없거나 본인인 경우
+  )
+
+  // 배포 승인 권한 체크
+  const canApproveDeploy = request.status === 'deploy_requested' && (
+    request.deploy_manager_id
+      ? request.deploy_manager_id === currentUserId
+      : true // deploy_manager_id가 null이면 본인이 직접 처리
+  )
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -186,36 +388,91 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
               {request.requester?.full_name || request.requester?.email}
             </span>
           </div>
+          {/* SR 구분 (대분류/소분류) */}
           <div className="flex items-center gap-2 text-sm">
             <Tag className="size-4 text-gray-400" />
-            <span className="text-gray-500">유형:</span>
-            <span className="text-gray-900">{TYPE_LABELS[request.type] || request.type}</span>
+            <span className="text-gray-500">SR 구분:</span>
+            {request.category_lv1?.name ? (
+              <span className="text-gray-900">
+                {request.category_lv1.name}
+                {request.category_lv2?.name && ` / ${request.category_lv2.name}`}
+              </span>
+            ) : (
+              <span className="text-gray-400">미분류</span>
+            )}
           </div>
           {request.system && (
             <div className="flex items-center gap-2 text-sm">
               <Server className="size-4 text-gray-400" />
               <span className="text-gray-500">시스템:</span>
-              <span className="text-gray-900">{request.system.name}</span>
+              <span className="text-gray-900">
+                {request.system.name}
+                {request.module?.name && (
+                  <span className="text-gray-500"> / {request.module.name}</span>
+                )}
+              </span>
             </div>
           )}
           <div className="flex items-center gap-2 text-sm">
             <Calendar className="size-4 text-gray-400" />
             <span className="text-gray-500">신청일:</span>
             <span className="text-gray-900">
-              {createdDate.toLocaleDateString('ko-KR', { 
-                year: 'numeric', 
-                month: 'short', 
+              {createdDate.toLocaleDateString('ko-KR', {
+                year: 'numeric',
+                month: 'short',
                 day: 'numeric',
                 hour: '2-digit',
                 minute: '2-digit'
               })}
             </span>
           </div>
+
+          {/* 공수 정보 표시 */}
+          {(request.estimated_fp || request.actual_fp || request.estimated_md || request.actual_md) && (
+            <div className="mt-3 p-3 rounded-lg bg-emerald-50 border border-emerald-200">
+              <div className="flex items-center gap-2 text-xs font-medium text-emerald-700 mb-2">
+                <Calculator className="size-3" />
+                공수 정보
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                {(request.estimated_fp != null || request.actual_fp != null) && (
+                  <div>
+                    <span className="text-emerald-600 block">FP</span>
+                    <span className="text-gray-700">
+                      {request.estimated_fp != null && `예상:${request.estimated_fp}`}
+                      {request.estimated_fp != null && request.actual_fp != null && ' / '}
+                      {request.actual_fp != null && `실제:${request.actual_fp}`}
+                    </span>
+                  </div>
+                )}
+                {(request.estimated_md != null || request.actual_md != null) && (
+                  <div>
+                    <span className="text-emerald-600 block">MD</span>
+                    <span className="text-gray-700">
+                      {request.estimated_md != null && `예상:${request.estimated_md}`}
+                      {request.estimated_md != null && request.actual_md != null && ' / '}
+                      {request.actual_md != null && `실제:${request.actual_md}`}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Quick Actions */}
         <div className="p-4 space-y-2">
           <h3 className="text-xs font-semibold text-gray-500 mb-3">빠른 작업</h3>
+
+          {/* 요청 정보 수정 버튼 */}
+          <Button
+            variant="outline"
+            onClick={() => setIsEditModalOpen(true)}
+            className="w-full gap-2 text-indigo-600 border-indigo-200 hover:bg-indigo-50 hover:border-indigo-300"
+          >
+            <Pencil className="size-4" />
+            요청 정보 수정
+          </Button>
 
           {/* 원본 채팅 보기 버튼 */}
           <Button
@@ -228,40 +485,270 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
             {hasOriginalChat === false ? '원본 채팅 없음' : '요청자 원본 채팅 보기'}
           </Button>
 
-          {request.status === 'requested' && (
+          {/* 상태별 다음 단계 버튼들 */}
+          {request.status === 'requested' && !request.manager_id && (
+            <>
+              <Button
+                onClick={handleAssign}
+                disabled={isAssigning}
+                className="w-full bg-indigo-600 hover:bg-indigo-700"
+              >
+                <Play className="size-4 mr-2" />
+                {isAssigning ? '배정 중...' : '내게 배정하기'}
+              </Button>
+              <Button
+                onClick={() => handleStatusUpdate('approved')}
+                disabled={isUpdatingStatus}
+                className="w-full bg-sky-600 hover:bg-sky-700"
+              >
+                <ThumbsUp className="size-4 mr-2" />
+                승인
+              </Button>
+            </>
+          )}
+
+          {/* 이미 배정된 요청 - 승인만 가능 */}
+          {request.status === 'requested' && request.manager_id && (
             <Button
-              onClick={handleAssign}
-              disabled={isAssigning}
-              className="w-full bg-indigo-600 hover:bg-indigo-700"
+              onClick={() => handleStatusUpdate('approved')}
+              disabled={isUpdatingStatus}
+              className="w-full bg-sky-600 hover:bg-sky-700"
             >
-              <Play className="size-4 mr-2" />
-              {isAssigning ? '배정 중...' : '내게 배정하기'}
+              <ThumbsUp className="size-4 mr-2" />
+              승인
             </Button>
           )}
 
-          {request.status === 'reviewing' && (
+          {request.status === 'approved' && (
+            <>
+              <Button
+                onClick={() => handleStatusUpdate('consulting')}
+                disabled={isUpdatingStatus}
+                className="w-full bg-indigo-600 hover:bg-indigo-700"
+              >
+                <Users className="size-4 mr-2" />
+                실무협의 요청
+              </Button>
+              <Button
+                onClick={() => handleStatusUpdate('accepted')}
+                disabled={isUpdatingStatus}
+                className="w-full bg-blue-600 hover:bg-blue-700"
+              >
+                <ClipboardCheck className="size-4 mr-2" />
+                접수
+              </Button>
+            </>
+          )}
+
+          {request.status === 'consulting' && (
+            <Button
+              onClick={() => handleStatusUpdate('accepted')}
+              disabled={isUpdatingStatus}
+              className="w-full bg-blue-600 hover:bg-blue-700"
+            >
+              <ClipboardCheck className="size-4 mr-2" />
+              접수
+            </Button>
+          )}
+
+          {request.status === 'accepted' && (
             <Button
               onClick={() => handleStatusUpdate('processing')}
               disabled={isUpdatingStatus}
               className="w-full bg-violet-600 hover:bg-violet-700"
             >
               <Play className="size-4 mr-2" />
-              {isUpdatingStatus ? '변경 중...' : '처리 시작'}
+              처리 시작
             </Button>
           )}
 
           {request.status === 'processing' && (
-            <Button
-              onClick={() => setStatusModalType('completed')}
-              disabled={isUpdatingStatus}
-              className="w-full bg-emerald-600 hover:bg-emerald-700"
-            >
-              <CheckCircle2 className="size-4 mr-2" />
-              처리 완료
-            </Button>
+            <>
+              <Button
+                onClick={() => setIsTestModalOpen(true)}
+                disabled={isUpdatingStatus}
+                className="w-full bg-orange-600 hover:bg-orange-700"
+              >
+                <TestTube2 className="size-4 mr-2" />
+                테스트 요청
+              </Button>
+              <Button
+                onClick={() => setStatusModalType('completed')}
+                disabled={isUpdatingStatus}
+                className="w-full bg-emerald-600 hover:bg-emerald-700"
+              >
+                <CheckCircle2 className="size-4 mr-2" />
+                처리 완료
+              </Button>
+            </>
           )}
 
-          {request.status !== 'completed' && request.status !== 'rejected' && (
+          {request.status === 'test_requested' && (
+            <>
+              {canCompleteTest ? (
+                <Button
+                  onClick={handleCompleteTest}
+                  disabled={isUpdatingStatus}
+                  className="w-full bg-teal-600 hover:bg-teal-700"
+                >
+                  <CheckSquare className="size-4 mr-2" />
+                  테스트 완료
+                </Button>
+              ) : (
+                <div className="text-sm text-gray-500 bg-gray-50 p-3 rounded-lg text-center">
+                  테스트 담당자가 테스트를 진행 중입니다.
+                </div>
+              )}
+              <Button
+                variant="outline"
+                onClick={() => handleStatusUpdate('processing')}
+                disabled={isUpdatingStatus}
+                className="w-full"
+              >
+                <ArrowRight className="size-4 mr-2 rotate-180" />
+                처리중으로 되돌리기
+              </Button>
+            </>
+          )}
+
+          {request.status === 'test_completed' && (
+            <>
+              <Button
+                onClick={() => setIsDeployModalOpen(true)}
+                disabled={isUpdatingStatus}
+                className="w-full bg-cyan-600 hover:bg-cyan-700"
+              >
+                <Rocket className="size-4 mr-2" />
+                배포 요청
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => handleStatusUpdate('processing')}
+                disabled={isUpdatingStatus}
+                className="w-full"
+              >
+                <ArrowRight className="size-4 mr-2 rotate-180" />
+                처리중으로 되돌리기
+              </Button>
+            </>
+          )}
+
+          {request.status === 'deploy_requested' && (
+            <>
+              {/* 일괄 배포 그룹 정보 표시 */}
+              {request.deploy_batch_id && request.deploy_batch_name && (
+                <div className="mb-3 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
+                  <div className="flex items-center gap-2 text-xs font-medium text-cyan-700 mb-2">
+                    <Package className="size-3" />
+                    일괄 배포 그룹
+                  </div>
+                  <p className="text-sm font-medium text-cyan-900 mb-2">
+                    {request.deploy_batch_name}
+                  </p>
+                  {isLoadingBatchRequests ? (
+                    <div className="flex items-center gap-2 text-xs text-cyan-600">
+                      <Loader2 className="size-3 animate-spin" />
+                      목록 로딩 중...
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      <p className="text-xs text-cyan-600 mb-1">
+                        포함된 요청 ({batchRequests.length}건):
+                      </p>
+                      <div className="max-h-[100px] overflow-y-auto space-y-1">
+                        {batchRequests.map(r => (
+                          <div
+                            key={r.id}
+                            className={cn(
+                              'text-xs px-2 py-1 rounded',
+                              r.id === request.id
+                                ? 'bg-cyan-200 text-cyan-900 font-medium'
+                                : 'bg-cyan-100/50 text-cyan-700'
+                            )}
+                          >
+                            {r.title}
+                            {r.id === request.id && ' (현재)'}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {canApproveDeploy ? (
+                <>
+                  {/* 일괄 배포 승인 버튼 (배포 그룹이 있을 때) */}
+                  {request.deploy_batch_id && batchRequests.length > 1 && (
+                    <Button
+                      onClick={handleApproveBatchDeploy}
+                      disabled={isBatchDeployLoading || isUpdatingStatus}
+                      className="w-full bg-cyan-600 hover:bg-cyan-700 mb-2"
+                    >
+                      {isBatchDeployLoading ? (
+                        <Loader2 className="size-4 mr-2 animate-spin" />
+                      ) : (
+                        <Package className="size-4 mr-2" />
+                      )}
+                      {batchRequests.length}건 일괄 배포 승인
+                    </Button>
+                  )}
+                  {/* 개별 배포 승인 버튼 */}
+                  <Button
+                    onClick={handleApproveDeploy}
+                    disabled={isUpdatingStatus}
+                    className={cn(
+                      'w-full',
+                      request.deploy_batch_id && batchRequests.length > 1
+                        ? 'bg-lime-600 hover:bg-lime-700'
+                        : 'bg-lime-600 hover:bg-lime-700'
+                    )}
+                  >
+                    <ShieldCheck className="size-4 mr-2" />
+                    {request.deploy_batch_id && batchRequests.length > 1 ? '이 요청만 배포 승인' : '배포 승인'}
+                  </Button>
+                </>
+              ) : (
+                <div className="text-sm text-gray-500 bg-gray-50 p-3 rounded-lg text-center">
+                  배포 승인자가 승인을 진행 중입니다.
+                </div>
+              )}
+              <Button
+                variant="outline"
+                onClick={() => handleStatusUpdate('test_completed')}
+                disabled={isUpdatingStatus}
+                className="w-full"
+              >
+                <ArrowRight className="size-4 mr-2 rotate-180" />
+                테스트완료로 되돌리기
+              </Button>
+            </>
+          )}
+
+          {request.status === 'deploy_approved' && (
+            <>
+              <Button
+                onClick={() => setStatusModalType('completed')}
+                disabled={isUpdatingStatus}
+                className="w-full bg-emerald-600 hover:bg-emerald-700"
+              >
+                <CheckCircle2 className="size-4 mr-2" />
+                완료
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => handleStatusUpdate('deploy_requested')}
+                disabled={isUpdatingStatus}
+                className="w-full"
+              >
+                <ArrowRight className="size-4 mr-2 rotate-180" />
+                배포요청으로 되돌리기
+              </Button>
+            </>
+          )}
+
+          {/* 반려 버튼 (완료/반려 상태가 아닐 때만) */}
+          {request.status !== 'completed' && request.status !== 'rejected' && request.status !== 'draft' && (
             <Button
               variant="outline"
               onClick={() => setStatusModalType('rejected')}
@@ -292,10 +779,12 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
           requestContext={{
             title: request.title,
             description: request.description,
-            type: request.type,
             priority: request.priority,
             requesterName: request.requester?.full_name || request.requester?.email,
-            systemName: request.system?.name
+            systemName: request.system?.name,
+            moduleName: request.module?.name,
+            category_lv1_name: request.category_lv1?.name,
+            category_lv2_name: request.category_lv2?.name
           }}
         />
       </div>
@@ -317,8 +806,53 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
           type={statusModalType}
           onConfirm={handleStatusWithReason}
           isLoading={isStatusModalLoading}
+          currentEffort={{
+            estimated_fp: request.estimated_fp,
+            actual_fp: request.actual_fp,
+            estimated_md: request.estimated_md,
+            actual_md: request.actual_md,
+          }}
         />
       )}
+
+      {/* 배포 정보 입력 모달 */}
+      <DeployInfoModal
+        open={isDeployModalOpen}
+        onOpenChange={setIsDeployModalOpen}
+        onConfirm={handleDeployRequest}
+        isLoading={isDeployModalLoading}
+        managers={managers}
+        currentUserId={currentUserId}
+        currentDeployInfo={{
+          deploy_type: request.deploy_type,
+          deploy_manager_id: request.deploy_manager_id,
+          deploy_scheduled_at: request.deploy_scheduled_at
+        }}
+      />
+
+      {/* 테스트 요청 모달 */}
+      <TestRequestModal
+        open={isTestModalOpen}
+        onOpenChange={setIsTestModalOpen}
+        onConfirm={handleTestRequest}
+        isLoading={isTestModalLoading}
+        managers={managers}
+        currentUserId={currentUserId}
+      />
+
+      {/* 요청 정보 수정 모달 */}
+      <RequestEditModal
+        open={isEditModalOpen}
+        onOpenChange={setIsEditModalOpen}
+        requestId={request.id}
+        currentData={{
+          system_id: request.system_id || request.system?.id || null,
+          module_id: request.module_id || request.module?.id || null,
+          category_lv1_id: request.category_lv1_id || request.category_lv1?.id || null,
+          category_lv2_id: request.category_lv2_id || request.category_lv2?.id || null,
+          priority: request.priority
+        }}
+      />
     </div>
   )
 }

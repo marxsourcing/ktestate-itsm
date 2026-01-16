@@ -8,7 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Settings, ChevronDown, MessagesSquare, Database, Users, FileSpreadsheet } from 'lucide-react'
+import { Settings, ChevronDown, MessagesSquare, Database, Users, FileSpreadsheet, Boxes, FolderTree } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export function AdminMenu() {
@@ -46,6 +46,18 @@ export function AdminMenu() {
           <Link href="/admin/systems" className="flex items-center gap-2 cursor-pointer">
             <Database className="size-4" />
             시스템 관리
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/admin/modules" className="flex items-center gap-2 cursor-pointer">
+            <Boxes className="size-4" />
+            모듈 관리
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/admin/categories" className="flex items-center gap-2 cursor-pointer">
+            <FolderTree className="size-4" />
+            분류 관리
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>

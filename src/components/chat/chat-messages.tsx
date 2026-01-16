@@ -16,9 +16,10 @@ export interface Message {
     requirementCard?: {
       system?: string
       module?: string
-      type?: 'feature_add' | 'feature_improve' | 'bug_fix' | 'other' | 'feature' | 'improvement' | 'bug'
       title?: string
       description?: string
+      category_lv1?: string  // 대분류 (SR 구분)
+      category_lv2?: string  // 소분류 (SR 상세 구분)
     }
     similarRequests?: Array<{
       id: string
@@ -36,9 +37,10 @@ interface ChatMessagesProps {
   messages: Message[]
   isLoading?: boolean
   onRequirementUpdate?: (data: RequirementData) => void
+  excludeRequestId?: string  // 유사 요청 검색 시 제외할 요청 ID
 }
 
-export function ChatMessages({ messages, isLoading, onRequirementUpdate }: ChatMessagesProps) {
+export function ChatMessages({ messages, isLoading, onRequirementUpdate, excludeRequestId }: ChatMessagesProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -116,6 +118,7 @@ export function ChatMessages({ messages, isLoading, onRequirementUpdate }: ChatM
                   <RequirementCard
                     data={message.metadata.requirementCard}
                     onUpdate={onRequirementUpdate}
+                    excludeRequestId={excludeRequestId}
                   />
                 </div>
               )}

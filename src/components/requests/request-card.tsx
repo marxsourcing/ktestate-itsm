@@ -43,12 +43,6 @@ const PRIORITY_CONFIG = {
   },
 }
 
-const TYPE_LABELS: Record<string, string> = {
-  feature_add: '기능추가',
-  feature_improve: '기능개선',
-  bug_fix: '버그수정',
-  other: '기타',
-}
 
 interface RequestCardProps {
   request: Request
@@ -115,18 +109,24 @@ export function RequestCard({
         </p>
       )}
 
-      {/* Footer: Type + System + Requester */}
+      {/* Footer: Category + System + Requester */}
       <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
-        {/* Type Badge */}
-        <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-600">
-          {TYPE_LABELS[request.type] || request.type}
-        </span>
+        {/* SR 구분 (대분류/소분류) */}
+        {request.category_lv1?.name && (
+          <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-700">
+            {request.category_lv1.name}
+            {request.category_lv2?.name && ` / ${request.category_lv2.name}`}
+          </span>
+        )}
 
-        {/* System */}
+        {/* System & Module */}
         {request.system?.name && (
           <span className="flex items-center gap-1">
             <Server className="size-3" />
             {request.system.name}
+            {request.module?.name && (
+              <span className="text-gray-400">/ {request.module.name}</span>
+            )}
           </span>
         )}
 

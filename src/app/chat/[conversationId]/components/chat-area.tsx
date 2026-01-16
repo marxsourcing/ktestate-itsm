@@ -5,16 +5,17 @@ import { useSearchParams } from 'next/navigation'
 import { ChatMessages, Message, RequirementData } from '@/components/chat/chat-messages'
 import { ChatInput } from '@/components/chat/chat-input'
 import { createClient } from '@/lib/supabase/client'
-import { addMessage, updateConversationTitle } from '@/app/chat/actions'
+import { addMessage, updateConversationTitle, updateMessageMetadata } from '@/app/chat/actions'
 import type { AttachmentData } from '@/app/chat/attachments'
 
 interface ChatAreaProps {
   conversationId: string
   initialMessages: Message[]
   conversationStatus: string
+  linkedRequestId?: string | null  // 이 대화에 연결된 요청 ID (확정된 경우)
 }
 
-export function ChatArea({ conversationId, initialMessages, conversationStatus }: ChatAreaProps) {
+export function ChatArea({ conversationId, initialMessages, conversationStatus, linkedRequestId }: ChatAreaProps) {
   const searchParams = useSearchParams()
   const [messages, setMessages] = useState<Message[]>(initialMessages)
   const [isLoading, setIsLoading] = useState(false)
@@ -196,7 +197,18 @@ export function ChatArea({ conversationId, initialMessages, conversationStatus }
     sendMessageRef.current = sendMessage
   }, [sendMessage])
 
-  const handleRequirementUpdate = useCallback((data: RequirementData) => {
+  const handleRequirementUpdate = useCallback(async (data: RequirementData) => {
+    // 마지막 요구사항 카드가 있는 메시지 찾기
+    const lastCardMessage = messages.findLast((m) => m.metadata?.requirementCard)
+    if (!lastCardMessage) return
+
+    const messageId = lastCardMessage.id
+    const updatedMetadata = {
+      ...lastCardMessage.metadata,
+      requirementCard: data,
+    }
+
+    // 로컬 상태 업데이트
     setMessages((prev) => {
       const lastCardIndex = prev.findLastIndex((m) => m.metadata?.requirementCard)
       if (lastCardIndex === -1) return prev
@@ -204,14 +216,19 @@ export function ChatArea({ conversationId, initialMessages, conversationStatus }
       const updated = [...prev]
       updated[lastCardIndex] = {
         ...updated[lastCardIndex],
-        metadata: {
-          ...updated[lastCardIndex].metadata,
-          requirementCard: data,
-        },
+        metadata: updatedMetadata,
       }
       return updated
     })
-  }, [])
+
+    // DB 업데이트 (스트리밍 메시지가 아닌 경우에만)
+    if (!messageId.startsWith('streaming-') && !messageId.startsWith('error-')) {
+      const result = await updateMessageMetadata(messageId, updatedMetadata)
+      if (result.error) {
+        console.error('메타데이터 저장 실패:', result.error)
+      }
+    }
+  }, [messages])
 
   const isConfirmed = conversationStatus === 'confirmed'
 
@@ -237,6 +254,7 @@ export function ChatArea({ conversationId, initialMessages, conversationStatus }
           messages={messages}
           isLoading={isLoading}
           onRequirementUpdate={handleRequirementUpdate}
+          excludeRequestId={linkedRequestId || undefined}
         />
       )}
 

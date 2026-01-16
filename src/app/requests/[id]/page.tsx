@@ -10,16 +10,24 @@ import {
   Server,
   Clock,
   CheckCircle2,
-  MessageCircle
+  MessageCircle,
+  Calculator
 } from 'lucide-react'
 import { HistoryTimeline } from './components/history-timeline'
 import { CommentsSection } from './components/comments-section'
 import { RequestChatArea } from './components/request-chat-area'
 
 const STATUS_CONFIG = {
+  draft: { label: '작성중', color: 'bg-gray-100 text-gray-600 border-gray-200' },
   requested: { label: '요청', color: 'bg-amber-100 text-amber-700 border-amber-200' },
-  reviewing: { label: '검토중', color: 'bg-blue-100 text-blue-700 border-blue-200' },
+  approved: { label: '승인', color: 'bg-sky-100 text-sky-700 border-sky-200' },
+  consulting: { label: '실무협의', color: 'bg-indigo-100 text-indigo-700 border-indigo-200' },
+  accepted: { label: '접수', color: 'bg-blue-100 text-blue-700 border-blue-200' },
   processing: { label: '처리중', color: 'bg-violet-100 text-violet-700 border-violet-200' },
+  test_requested: { label: '테스트요청', color: 'bg-orange-100 text-orange-700 border-orange-200' },
+  test_completed: { label: '테스트완료', color: 'bg-teal-100 text-teal-700 border-teal-200' },
+  deploy_requested: { label: '배포요청', color: 'bg-cyan-100 text-cyan-700 border-cyan-200' },
+  deploy_approved: { label: '배포승인', color: 'bg-lime-100 text-lime-700 border-lime-200' },
   completed: { label: '완료', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
   rejected: { label: '반려', color: 'bg-red-100 text-red-700 border-red-200' },
 }
@@ -31,12 +39,6 @@ const PRIORITY_CONFIG = {
   low: { label: '낮음', color: 'bg-gray-100 text-gray-600' },
 }
 
-const TYPE_LABELS: Record<string, string> = {
-  feature_add: '기능추가',
-  feature_improve: '기능개선',
-  bug_fix: '버그수정',
-  other: '기타',
-}
 
 export default async function RequestDetailPage({ params }: { params: { id: string } }) {
   const { id } = await params
@@ -51,7 +53,10 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
       *,
       requester:profiles!service_requests_requester_id_fkey(full_name, email),
       manager:profiles!service_requests_manager_id_fkey(full_name, email),
-      system:systems(name)
+      system:systems(name),
+      module:system_modules(name),
+      category_lv1:request_categories_lv1(id, name),
+      category_lv2:request_categories_lv2(id, name)
     `)
     .eq('id', id)
     .single()
@@ -120,9 +125,13 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
               <Badge variant="outline" className={priorityConfig.color}>
                 {priorityConfig.label}
               </Badge>
-              <span className="text-xs text-gray-400 px-2 py-0.5 rounded bg-gray-100">
-                {TYPE_LABELS[request.type] || request.type}
-              </span>
+              {/* SR 구분 (대분류/소분류) */}
+              {request.category_lv1?.name && (
+                <span className="text-xs px-2 py-0.5 rounded bg-rose-100 text-rose-700">
+                  {request.category_lv1.name}
+                  {request.category_lv2?.name && ` / ${request.category_lv2.name}`}
+                </span>
+              )}
             </div>
             <h1 className="text-xl font-bold text-gray-900 line-clamp-1">
               {request.title}
@@ -190,11 +199,56 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
                     <Server className="size-4 text-gray-400" />
                     <div>
                       <span className="text-xs text-gray-400 block">관련 시스템</span>
-                      <span className="text-gray-700">{request.system.name}</span>
+                      <span className="text-gray-700">
+                        {request.system.name}
+                        {request.module?.name && (
+                          <span className="text-gray-500"> / {request.module.name}</span>
+                        )}
+                      </span>
                     </div>
                   </div>
                 )}
               </div>
+
+              {/* Effort Info - Only show if request is completed and has effort data */}
+              {request.status === 'completed' && (
+                request.estimated_fp || request.actual_fp || request.estimated_md || request.actual_md
+              ) && (
+                <div className="mt-4 p-3 rounded-lg bg-emerald-50 border border-emerald-200">
+                  <div className="flex items-center gap-2 text-sm font-medium text-emerald-700 mb-2">
+                    <Calculator className="size-4" />
+                    공수 정보
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    {(request.estimated_fp || request.actual_fp) && (
+                      <div>
+                        <span className="text-xs text-emerald-600 block">Function Point (FP)</span>
+                        <div className="flex gap-2 text-gray-700">
+                          {request.estimated_fp != null && (
+                            <span>예상: {request.estimated_fp}</span>
+                          )}
+                          {request.actual_fp != null && (
+                            <span>실제: {request.actual_fp}</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {(request.estimated_md || request.actual_md) && (
+                      <div>
+                        <span className="text-xs text-emerald-600 block">Man Day (MD)</span>
+                        <div className="flex gap-2 text-gray-700">
+                          {request.estimated_md != null && (
+                            <span>예상: {request.estimated_md}</span>
+                          )}
+                          {request.actual_md != null && (
+                            <span>실제: {request.actual_md}</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

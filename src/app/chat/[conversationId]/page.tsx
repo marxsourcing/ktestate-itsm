@@ -48,10 +48,11 @@ export default async function ConversationPage({ params }: Props) {
         )
       }
     >
-      <ChatArea 
-        conversationId={conversationId} 
+      <ChatArea
+        conversationId={conversationId}
         initialMessages={messages || []}
         conversationStatus={conversation.status}
+        linkedRequestId={conversation.request_id}
       />
     </ChatLayout>
   )

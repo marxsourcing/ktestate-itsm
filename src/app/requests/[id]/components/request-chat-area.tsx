@@ -238,6 +238,7 @@ export function RequestChatArea({
         <ChatMessages
           messages={messages}
           isLoading={isLoading}
+          excludeRequestId={requestId}
         />
       )}
 

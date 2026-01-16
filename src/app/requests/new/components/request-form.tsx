@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -15,6 +15,18 @@ import {
 import { createServiceRequest } from '@/app/requests/actions'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
+
+interface CategoryLv1 {
+  id: string
+  name: string
+}
+
+interface CategoryLv2 {
+  id: string
+  name: string
+  category_lv1_id: string
+}
 
 interface RequestFormProps {
   systems: { id: string, name: string }[]
@@ -22,7 +34,32 @@ interface RequestFormProps {
 
 export function RequestForm({ systems }: RequestFormProps) {
   const [isPending, setIsPending] = useState(false)
+  const [categoriesLv1, setCategoriesLv1] = useState<CategoryLv1[]>([])
+  const [categoriesLv2, setCategoriesLv2] = useState<CategoryLv2[]>([])
+  const [filteredLv2, setFilteredLv2] = useState<CategoryLv2[]>([])
+  const [selectedLv1, setSelectedLv1] = useState<string>('')
   const router = useRouter()
+
+  useEffect(() => {
+    async function loadCategories() {
+      const supabase = createClient()
+      const [{ data: lv1 }, { data: lv2 }] = await Promise.all([
+        supabase.from('request_categories_lv1').select('id, name').order('name'),
+        supabase.from('request_categories_lv2').select('id, name, category_lv1_id').order('name'),
+      ])
+      setCategoriesLv1(lv1 || [])
+      setCategoriesLv2(lv2 || [])
+    }
+    loadCategories()
+  }, [])
+
+  useEffect(() => {
+    if (selectedLv1) {
+      setFilteredLv2(categoriesLv2.filter(c => c.category_lv1_id === selectedLv1))
+    } else {
+      setFilteredLv2([])
+    }
+  }, [selectedLv1, categoriesLv2])
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -50,34 +87,53 @@ export function RequestForm({ systems }: RequestFormProps) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="type">요청 유형</Label>
-          <Select name="type" defaultValue="other">
+          <Label htmlFor="category_lv1_id">SR 구분</Label>
+          <Select name="category_lv1_id" value={selectedLv1} onValueChange={setSelectedLv1}>
             <SelectTrigger>
-              <SelectValue placeholder="유형 선택" />
+              <SelectValue placeholder="SR 구분 선택" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="feature_add">기능추가</SelectItem>
-              <SelectItem value="feature_improve">기능개선</SelectItem>
-              <SelectItem value="bug_fix">버그수정</SelectItem>
-              <SelectItem value="other">기타</SelectItem>
+              <SelectItem value="none">선택 안함</SelectItem>
+              {categoriesLv1.map((cat) => (
+                <SelectItem key={cat.id} value={cat.id}>
+                  {cat.name}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="priority">우선순위</Label>
-          <Select name="priority" defaultValue="medium">
+          <Label htmlFor="category_lv2_id">SR 상세 구분</Label>
+          <Select name="category_lv2_id" disabled={!selectedLv1 || selectedLv1 === 'none'}>
             <SelectTrigger>
-              <SelectValue placeholder="우선순위 선택" />
+              <SelectValue placeholder="SR 상세 구분 선택" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="low">낮음</SelectItem>
-              <SelectItem value="medium">보통</SelectItem>
-              <SelectItem value="high">높음</SelectItem>
-              <SelectItem value="urgent">긴급</SelectItem>
+              <SelectItem value="none">선택 안함</SelectItem>
+              {filteredLv2.map((cat) => (
+                <SelectItem key={cat.id} value={cat.id}>
+                  {cat.name}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="priority">우선순위</Label>
+        <Select name="priority" defaultValue="medium">
+          <SelectTrigger>
+            <SelectValue placeholder="우선순위 선택" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="low">낮음</SelectItem>
+            <SelectItem value="medium">보통</SelectItem>
+            <SelectItem value="high">높음</SelectItem>
+            <SelectItem value="urgent">긴급</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="space-y-2">

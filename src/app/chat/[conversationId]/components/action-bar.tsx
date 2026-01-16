@@ -44,8 +44,10 @@ export function ActionBar({ conversationId }: ActionBarProps) {
       const result = await confirmRequirement(conversationId, {
         title: requirementCard.title,
         description: requirementCard.description || '',
-        type: mapTypeToSrType(requirementCard.type),
         system: requirementCard.system,
+        module: requirementCard.module,
+        category_lv1: requirementCard.category_lv1,
+        category_lv2: requirementCard.category_lv2,
       })
 
       if (result.error) {
@@ -60,25 +62,6 @@ export function ActionBar({ conversationId }: ActionBarProps) {
       console.error(err)
     } finally {
       setIsConfirming(false)
-    }
-  }
-
-  function mapTypeToSrType(type?: string): string {
-    // 새 유형 코드 (feature_add, feature_improve, bug_fix, other) 그대로 사용
-    const validTypes = ['feature_add', 'feature_improve', 'bug_fix', 'other']
-    if (type && validTypes.includes(type)) {
-      return type
-    }
-    // 구 유형 코드 호환성 유지
-    switch (type) {
-      case 'feature':
-        return 'feature_add'
-      case 'improvement':
-        return 'feature_improve'
-      case 'bug':
-        return 'bug_fix'
-      default:
-        return 'other'
     }
   }
 

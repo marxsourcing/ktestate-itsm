@@ -21,10 +21,11 @@ interface ManagerChatRequest {
   requestContext?: {
     title: string
     description: string
-    type: string
     priority: string
     requesterName?: string
     systemName?: string
+    category_lv1_name?: string  // SR 구분 (대분류)
+    category_lv2_name?: string  // SR 상세 구분 (소분류)
   }
 }
 
@@ -106,9 +107,13 @@ export async function POST(request: NextRequest) {
     // 요청 컨텍스트가 있으면 시스템 프롬프트에 추가
     let contextPrompt = MANAGER_SYSTEM_PROMPT
     if (requestContext) {
+      const categoryDisplay = requestContext.category_lv1_name
+        ? (requestContext.category_lv2_name ? `${requestContext.category_lv1_name} / ${requestContext.category_lv2_name}` : requestContext.category_lv1_name)
+        : '미지정'
+
       contextPrompt += `\n\n현재 처리 중인 서비스 요청 정보:
 - 제목: ${requestContext.title}
-- 유형: ${requestContext.type}
+- SR 구분: ${categoryDisplay}
 - 우선순위: ${requestContext.priority}
 - 요청자: ${requestContext.requesterName || '알 수 없음'}
 - 시스템: ${requestContext.systemName || '미지정'}
@@ -125,7 +130,7 @@ export async function POST(request: NextRequest) {
 사례 ${i + 1} (유사도 ${c.similarity}%):
 - 제목: ${c.title}
 - 상태: ${c.status}
-- 유형: ${c.type}
+- SR 구분: ${c.category_lv1_name || '미지정'}${c.category_lv2_name ? ` / ${c.category_lv2_name}` : ''}
 - 요청 내용: ${c.description?.slice(0, 200) || '내용 없음'}
 - 처리일: ${c.created_at}
 ${c.comments ? `- 처리 답변: ${c.comments}` : ''}`).join('\n')}`
@@ -259,9 +264,10 @@ async function searchSimilarCases(supabase: any, title: string, description: str
         title,
         description,
         status,
-        type,
         created_at,
-        systems:system_id (name)
+        systems:system_id (name),
+        category_lv1:request_categories_lv1 (name),
+        category_lv2:request_categories_lv2 (name)
       `)
       .in('status', ['completed', 'rejected']) // 처리 완료된 건만
       .order('created_at', { ascending: false })
@@ -288,7 +294,8 @@ async function searchSimilarCases(supabase: any, title: string, description: str
       title: string
       description: string
       status: string
-      type: string
+      category_lv1_name?: string
+      category_lv2_name?: string
       created_at: string
       similarity: number
       comments?: string
@@ -309,12 +316,20 @@ async function searchSimilarCases(supabase: any, title: string, description: str
           .order('created_at', { ascending: false })
           .limit(1)
 
+        const categoryLv1 = req.category_lv1 as { name: string } | null | { name: string }[]
+        const categoryLv2 = req.category_lv2 as { name: string } | null | { name: string }[]
+
         similarCases.push({
           id: req.id,
           title: req.title,
           description: req.description,
           status: req.status === 'completed' ? '완료' : '반려',
-          type: req.type,
+          category_lv1_name: categoryLv1
+            ? (Array.isArray(categoryLv1) ? categoryLv1[0]?.name : categoryLv1?.name) || undefined
+            : undefined,
+          category_lv2_name: categoryLv2
+            ? (Array.isArray(categoryLv2) ? categoryLv2[0]?.name : categoryLv2?.name) || undefined
+            : undefined,
           created_at: new Date(req.created_at).toLocaleDateString('ko-KR'),
           similarity: Math.round(similarity),
           comments: comments?.[0]?.content?.slice(0, 200)
@@ -369,20 +384,24 @@ function generateDummyResponse(
   context?: {
     title: string
     description: string
-    type: string
     priority: string
     requesterName?: string
+    category_lv1_name?: string
+    category_lv2_name?: string
   }
 ) {
   const lowerMessage = message.toLowerCase()
   const title = context?.title || '요청'
+  const categoryDisplay = context?.category_lv1_name
+    ? (context?.category_lv2_name ? `${context.category_lv1_name} / ${context.category_lv2_name}` : context.category_lv1_name)
+    : '일반'
 
   if (lowerMessage.includes('유사') || lowerMessage.includes('사례') || lowerMessage.includes('과거')) {
     return `**"${title}"와 유사한 과거 사례 분석**
 
 해당 요청 내용을 분석한 결과, 다음과 같은 유사 사례를 참고하실 수 있습니다:
 
-📋 **유사 사례 1**: 동일 시스템 관련 ${context?.type === 'bug_fix' ? '버그 수정' : '기능 개선'} 요청
+📋 **유사 사례 1**: 동일 시스템 관련 [${categoryDisplay}] 요청
 - 처리 방법: 담당 개발자와 협의 후 패치 적용
 - 소요 시간: 약 2-3일
 - 결과: 정상 처리 완료
