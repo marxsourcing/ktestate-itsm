@@ -118,6 +118,46 @@ const STATUS_COLUMNS = [
   },
 ]
 
+// 요청자용 통합 컬럼 정의 (4단계)
+const REQUESTER_COLUMNS = [
+  {
+    id: 'draft',
+    label: '작성중',
+    icon: FileEdit,
+    gradient: 'from-gray-400 to-gray-500',
+    bgColor: 'bg-gray-50',
+    borderColor: 'border-gray-200',
+    statuses: ['draft', 'draft_chat']
+  },
+  {
+    id: 'in_progress',
+    label: '진행중',
+    icon: Loader2,
+    gradient: 'from-blue-500 to-indigo-500',
+    bgColor: 'bg-blue-50',
+    borderColor: 'border-blue-200',
+    statuses: ['requested', 'approved', 'consulting', 'accepted', 'processing', 'test_requested', 'test_completed', 'deploy_requested', 'deploy_approved']
+  },
+  {
+    id: 'completed',
+    label: '완료',
+    icon: CheckCircle2,
+    gradient: 'from-emerald-500 to-green-500',
+    bgColor: 'bg-emerald-50',
+    borderColor: 'border-emerald-200',
+    statuses: ['completed']
+  },
+  {
+    id: 'rejected',
+    label: '반려',
+    icon: XCircle,
+    gradient: 'from-rose-500 to-red-500',
+    bgColor: 'bg-rose-50',
+    borderColor: 'border-rose-200',
+    statuses: ['rejected']
+  },
+]
+
 export type Request = {
   id: string
   title: string
@@ -132,28 +172,33 @@ export type Request = {
   module?: { name: string } | null
   category_lv1?: { id: string; name: string } | null  // 대분류 (SR 구분)
   category_lv2?: { id: string; name: string } | null  // 소분류 (SR 상세 구분)
+  is_chat_draft?: boolean
 }
 
 interface KanbanBoardProps {
   requests: Request[]
+  isManager: boolean
 }
 
-export function KanbanBoard({ requests }: KanbanBoardProps) {
-  const getRequestsByStatus = (status: string) => {
-    return requests.filter((r) => r.status === status)
+export function KanbanBoard({ requests, isManager }: KanbanBoardProps) {
+  const getRequestsByCombinedStatus = (statuses: string[]) => {
+    return requests.filter((r) => statuses.includes(r.status))
   }
+
+  const columns = isManager ? STATUS_COLUMNS.map(col => ({ ...col, statuses: [col.id] })) : REQUESTER_COLUMNS
 
   return (
     <div className="flex gap-2 overflow-x-auto pb-4 px-1 h-full">
-      {STATUS_COLUMNS.map((column) => {
-        const columnRequests = getRequestsByStatus(column.id)
+      {columns.map((column) => {
+        const columnRequests = getRequestsByCombinedStatus(column.statuses)
         const Icon = column.icon
 
         return (
           <div
             key={column.id}
             className={cn(
-              'flex-shrink-0 w-[240px] flex flex-col rounded-xl',
+              'shrink-0 flex flex-col rounded-xl',
+              isManager ? 'w-[240px]' : 'flex-1 min-w-[280px]',
               'bg-white border border-gray-200'
             )}
           >
@@ -161,10 +206,10 @@ export function KanbanBoard({ requests }: KanbanBoardProps) {
             <div className={cn('p-3 rounded-t-xl', column.bgColor)}>
               <div className="flex items-center gap-2">
                 <div className={cn(
-                  'w-7 h-7 rounded-lg flex items-center justify-center bg-gradient-to-br text-white',
+                  'w-7 h-7 rounded-lg flex items-center justify-center bg-linear-to-br text-white',
                   column.gradient
                 )}>
-                  <Icon className="size-3.5" />
+                  <Icon className={cn("size-3.5", column.id === 'in_progress' && "animate-spin-slow")} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <h3 className="font-semibold text-gray-800 text-sm truncate">{column.label}</h3>
@@ -194,6 +239,8 @@ export function KanbanBoard({ requests }: KanbanBoardProps) {
                     key={request.id}
                     request={request}
                     compact
+                    isManager={isManager}
+                    showDetailedStatus={!isManager && column.id === 'in_progress'}
                   />
                 ))
               )}

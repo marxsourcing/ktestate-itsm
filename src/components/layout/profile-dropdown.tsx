@@ -45,7 +45,7 @@ export function ProfileDropdown({ user }: ProfileDropdownProps) {
               className="size-8 rounded-full object-cover"
             />
           ) : (
-            <div className="flex size-8 items-center justify-center rounded-full bg-gradient-to-br from-primary/80 to-primary text-sm font-medium text-white">
+            <div className="flex size-8 items-center justify-center rounded-full bg-linear-to-br from-primary/80 to-primary text-sm font-medium text-white">
               {initials}
             </div>
           )}

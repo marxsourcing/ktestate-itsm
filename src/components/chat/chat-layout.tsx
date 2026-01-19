@@ -29,7 +29,7 @@ export function ChatLayout({ sidebar, children, actionBar }: ChatLayoutProps) {
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed inset-y-[3.5rem] left-0 z-40 w-[280px] flex-shrink-0 transform transition-transform duration-200 ease-in-out md:relative md:inset-y-0 md:translate-x-0',
+          'fixed inset-y-[3.5rem] left-0 z-40 w-[280px] shrink-0 transform transition-transform duration-200 ease-in-out md:relative md:inset-y-0 md:translate-x-0',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full',
           'bg-white border-r border-gray-200'
         )}
