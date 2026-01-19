@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
@@ -80,6 +80,115 @@ export function RequirementCard({ data, onUpdate, readOnly = false, excludeReque
   const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false)
   const [duplicatesDismissed, setDuplicatesDismissed] = useState(false)
 
+  const loadSystems = useCallback(async () => {
+    setIsLoadingSystems(true)
+    try {
+      const supabase = createClient()
+      const { data: systemsData, error } = await supabase
+        .from('systems')
+        .select('id, name, code')
+        .eq('status', 'active')
+        .order('name')
+
+      if (error) {
+        console.error('Failed to load systems:', error)
+      } else {
+        setSystems(systemsData || [])
+      }
+    } catch (err) {
+      console.error('Error loading systems:', err)
+    } finally {
+      setIsLoadingSystems(false)
+    }
+  }, [])
+
+  const loadModules = useCallback(async () => {
+    setIsLoadingModules(true)
+    try {
+      const supabase = createClient()
+      const { data: modulesData, error } = await supabase
+        .from('system_modules')
+        .select('id, system_id, code, name')
+        .eq('is_active', true)
+        .order('sort_order')
+
+      if (error) {
+        console.error('Failed to load modules:', error)
+      } else {
+        setModules(modulesData || [])
+      }
+    } catch (err) {
+      console.error('Error loading modules:', err)
+    } finally {
+      setIsLoadingModules(false)
+    }
+  }, [])
+
+  const loadCategories = useCallback(async () => {
+    setIsLoadingCategories(true)
+    try {
+      const supabase = createClient()
+
+      // 대분류 로드
+      const { data: lv1Data, error: lv1Error } = await supabase
+        .from('request_categories_lv1')
+        .select('id, code, name')
+        .eq('is_active', true)
+        .order('sort_order')
+
+      if (lv1Error) {
+        console.error('Failed to load categories lv1:', lv1Error)
+      } else {
+        setCategoriesLv1(lv1Data || [])
+      }
+
+      // 소분류 로드
+      const { data: lv2Data, error: lv2Error } = await supabase
+        .from('request_categories_lv2')
+        .select('id, category_lv1_id, code, name')
+        .eq('is_active', true)
+        .order('sort_order')
+
+      if (lv2Error) {
+        console.error('Failed to load categories lv2:', lv2Error)
+      } else {
+        setCategoriesLv2(lv2Data || [])
+      }
+    } catch (err) {
+      console.error('Error loading categories:', err)
+    } finally {
+      setIsLoadingCategories(false)
+    }
+  }, [])
+
+  const checkDuplicates = useCallback(async () => {
+    if (duplicatesDismissed) return
+
+    setIsCheckingDuplicates(true)
+    try {
+      const response = await fetch('/api/ai/similar-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: data.title,
+          description: data.description,
+          system: data.system,
+          excludeId: excludeRequestId  // 이미 확정된 요청 조회 시 해당 요청 제외
+        })
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        setSimilarRequests(result.similarRequests || [])
+        setHasDuplicate(result.hasDuplicate || false)
+      }
+    } catch (error) {
+      console.error('Failed to check duplicates:', error)
+    } finally {
+      setIsCheckingDuplicates(false)
+    }
+  }, [data.title, data.description, data.system, duplicatesDismissed, excludeRequestId])
+
   // 시스템, 모듈, 분류 목록 로드
   useEffect(() => {
     if (isEditing) {
@@ -91,7 +200,7 @@ export function RequirementCard({ data, onUpdate, readOnly = false, excludeReque
         loadCategories()
       }
     }
-  }, [isEditing])
+  }, [isEditing, systems.length, categoriesLv1.length, loadSystems, loadModules, loadCategories])
 
   // 시스템 선택 시 모듈 필터링
   useEffect(() => {
@@ -132,116 +241,7 @@ export function RequirementCard({ data, onUpdate, readOnly = false, excludeReque
     if (data.title || data.description) {
       checkDuplicates()
     }
-  }, [data.title, data.description, data.system])
-
-  async function checkDuplicates() {
-    if (duplicatesDismissed) return
-
-    setIsCheckingDuplicates(true)
-    try {
-      const response = await fetch('/api/ai/similar-requests', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: data.title,
-          description: data.description,
-          system: data.system,
-          excludeId: excludeRequestId  // 이미 확정된 요청 조회 시 해당 요청 제외
-        })
-      })
-
-      if (response.ok) {
-        const result = await response.json()
-        setSimilarRequests(result.similarRequests || [])
-        setHasDuplicate(result.hasDuplicate || false)
-      }
-    } catch (error) {
-      console.error('Failed to check duplicates:', error)
-    } finally {
-      setIsCheckingDuplicates(false)
-    }
-  }
-
-  async function loadSystems() {
-    setIsLoadingSystems(true)
-    try {
-      const supabase = createClient()
-      const { data: systemsData, error } = await supabase
-        .from('systems')
-        .select('id, name, code')
-        .eq('status', 'active')
-        .order('name')
-
-      if (error) {
-        console.error('Failed to load systems:', error)
-      } else {
-        setSystems(systemsData || [])
-      }
-    } catch (err) {
-      console.error('Error loading systems:', err)
-    } finally {
-      setIsLoadingSystems(false)
-    }
-  }
-
-  async function loadModules() {
-    setIsLoadingModules(true)
-    try {
-      const supabase = createClient()
-      const { data: modulesData, error } = await supabase
-        .from('system_modules')
-        .select('id, system_id, code, name')
-        .eq('is_active', true)
-        .order('sort_order')
-
-      if (error) {
-        console.error('Failed to load modules:', error)
-      } else {
-        setModules(modulesData || [])
-      }
-    } catch (err) {
-      console.error('Error loading modules:', err)
-    } finally {
-      setIsLoadingModules(false)
-    }
-  }
-
-  async function loadCategories() {
-    setIsLoadingCategories(true)
-    try {
-      const supabase = createClient()
-
-      // 대분류 로드
-      const { data: lv1Data, error: lv1Error } = await supabase
-        .from('request_categories_lv1')
-        .select('id, code, name')
-        .eq('is_active', true)
-        .order('sort_order')
-
-      if (lv1Error) {
-        console.error('Failed to load categories lv1:', lv1Error)
-      } else {
-        setCategoriesLv1(lv1Data || [])
-      }
-
-      // 소분류 로드
-      const { data: lv2Data, error: lv2Error } = await supabase
-        .from('request_categories_lv2')
-        .select('id, category_lv1_id, code, name')
-        .eq('is_active', true)
-        .order('sort_order')
-
-      if (lv2Error) {
-        console.error('Failed to load categories lv2:', lv2Error)
-      } else {
-        setCategoriesLv2(lv2Data || [])
-      }
-    } catch (err) {
-      console.error('Error loading categories:', err)
-    } finally {
-      setIsLoadingCategories(false)
-    }
-  }
+  }, [data.title, data.description, checkDuplicates])
 
   function handleSave() {
     onUpdate?.(editData)
@@ -277,7 +277,7 @@ export function RequirementCard({ data, onUpdate, readOnly = false, excludeReque
           onClick={() => setIsExpanded(!isExpanded)}
         >
           <ClipboardList className="size-5 text-rose-600" />
-          <span className="flex-1 font-medium text-rose-700">요구사항 분석 결과</span>
+          <span className="flex-1 font-medium text-rose-700">요청/문의사항</span>
           <ChevronDown
           className={cn(
             'size-5 text-rose-600 transition-transform',

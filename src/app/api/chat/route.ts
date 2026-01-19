@@ -2,42 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
+type SupabaseClient = Awaited<ReturnType<typeof createClient>>
+
 const BASE_SYSTEM_PROMPT = `당신은 KT Estate의 IT 서비스 요구사항 접수를 도와주는 AI 어시스턴트입니다.
-
-사용자의 요구사항을 분석하여 다음 정보를 파악해야 합니다:
-1. 시스템: 어떤 IT 시스템에 관한 요청인가
-2. 모듈: 해당 시스템의 어떤 기능/모듈에 관한 것인가
-3. 대분류(SR 구분): 요청의 대분류 카테고리
-4. 소분류(SR 상세 구분): 대분류 내 세부 분류
-5. 제목: 요구사항을 한 줄로 요약
-6. 상세 내용: 구체적인 요구사항 설명
-
-대화를 통해 부족한 정보를 자연스럽게 물어보세요.
-
-**중요**: 시스템과 모듈은 반드시 아래 목록에서 선택해야 합니다.
-
-{SYSTEM_MODULE_LIST}
-
-**중요**: 대분류와 소분류는 반드시 아래 목록에서 선택해야 합니다.
-
-{CATEGORY_LIST}
-
-충분한 정보가 모이면, 응답 마지막에 다음 형식의 JSON 블록을 포함하세요:
-\`\`\`requirement
-{
-  "system": "시스템명 (위 목록에서 선택)",
-  "module": "모듈명 (위 목록에서 선택)",
-  "category_lv1": "대분류명 (위 목록에서 선택)",
-  "category_lv2": "소분류명 (위 목록에서 선택, 해당 대분류의 소분류 중 선택)",
-  "title": "요구사항 제목",
-  "description": "상세 설명"
-}
-\`\`\`
-
+... (생략) ...
 일반적인 대화는 자연스럽게 하되, 요구사항 카드가 필요할 때만 위 JSON 블록을 포함하세요.`
 
 // 시스템 및 모듈 목록 조회
-async function getSystemModuleList(supabase: any) {
+async function getSystemModuleList(supabase: SupabaseClient) {
   const { data: systems } = await supabase
     .from('systems')
     .select('id, name, code')
@@ -55,10 +27,10 @@ async function getSystemModuleList(supabase: any) {
   }
 
   const modulesBySystem = new Map<string, string[]>()
-  for (const module of modules || []) {
-    const list = modulesBySystem.get(module.system_id) || []
-    list.push(module.name)
-    modulesBySystem.set(module.system_id, list)
+  for (const mod of modules || []) {
+    const list = modulesBySystem.get(mod.system_id) || []
+    list.push(mod.name)
+    modulesBySystem.set(mod.system_id, list)
   }
 
   const lines: string[] = []
@@ -75,7 +47,7 @@ async function getSystemModuleList(supabase: any) {
 }
 
 // 대분류/소분류 목록 조회
-async function getCategoryList(supabase: any) {
+async function getCategoryList(supabase: SupabaseClient) {
   const { data: categoriesLv1 } = await supabase
     .from('request_categories_lv1')
     .select('id, code, name')
@@ -140,7 +112,7 @@ export async function POST(request: NextRequest) {
     const genAI = new GoogleGenerativeAI(geminiApiKey)
     const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
 
-    const chatHistory = messages.slice(-10).map((m: any) => ({
+    const chatHistory = messages.slice(-10).map((m: { role: string; content: string }) => ({
       role: m.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: m.content }],
     }))

@@ -26,7 +26,9 @@ import {
   Calculator,
   Pencil,
   Package,
-  Loader2
+  Loader2,
+  X,
+  Sparkles
 } from 'lucide-react'
 import { ManagerAiChat } from './manager-ai-chat'
 import { OriginalChatModal } from './original-chat-modal'
@@ -78,6 +80,7 @@ interface WorkspaceRequestDetailProps {
   request: AssignedRequest
   currentUserId: string
   onStatusChange?: (requestId: string, newStatus: string, previousStatus?: string) => void
+  viewMode?: 'full' | 'detail-only' | 'side-panel'
 }
 
 const PRIORITY_CONFIG = {
@@ -103,7 +106,12 @@ const STATUS_CONFIG = {
 }
 
 
-export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange }: WorkspaceRequestDetailProps) {
+export function WorkspaceRequestDetail({ 
+  request, 
+  currentUserId, 
+  onStatusChange,
+  viewMode = 'full'
+}: WorkspaceRequestDetailProps) {
   const router = useRouter()
   const [isAssigning, setIsAssigning] = useState(false)
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
@@ -116,6 +124,7 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
   const [isTestModalOpen, setIsTestModalOpen] = useState(false)
   const [isTestModalLoading, setIsTestModalLoading] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [isAiChatOpen, setIsAiChatOpen] = useState(false)
   const [managers, setManagers] = useState<{ id: string; full_name: string | null; email: string }[]>([])
   // 일괄 배포 관련 상태
   const [batchRequests, setBatchRequests] = useState<Array<{
@@ -161,6 +170,19 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
   const priorityConfig = PRIORITY_CONFIG[request.priority as keyof typeof PRIORITY_CONFIG] || PRIORITY_CONFIG.medium
   const statusConfig = STATUS_CONFIG[request.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.requested
   const createdDate = new Date(request.created_at)
+
+  if (viewMode === 'side-panel') {
+    return (
+      <div className="h-full overflow-y-auto p-4 space-y-6 bg-gray-50">
+        <SimilarCasesPanel
+          requestId={request.id}
+          requestTitle={request.title}
+          requestDescription={request.description}
+          systemName={request.system?.name}
+        />
+      </div>
+    )
+  }
 
   const handleAssign = async () => {
     setIsAssigning(true)
@@ -343,18 +365,35 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
   )
 
   return (
-    <div className="flex h-full overflow-hidden">
+    <div className="flex h-full overflow-hidden relative">
       {/* Request Info Panel */}
-      <div className="w-[320px] flex-shrink-0 bg-white border-r border-gray-200 overflow-y-auto">
-        {/* Header */}
-        <div className="p-4 border-b border-gray-100 bg-gradient-to-br from-gray-50 to-white">
-          <div className="flex items-center gap-2 mb-3">
-            <Badge variant="outline" className={statusConfig.color}>
-              {statusConfig.label}
-            </Badge>
-            <Badge variant="outline" className={priorityConfig.color}>
-              {priorityConfig.label}
-            </Badge>
+      <div className={cn(
+        "shrink-0 bg-white flex flex-col h-full",
+        viewMode === 'full' ? "w-[320px] border-r border-gray-200" : "w-full"
+      )}>
+        {/* Header (Fixed) */}
+        <div className="p-4 border-b border-gray-100 bg-linear-to-br from-gray-50 to-white shrink-0">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className={statusConfig.color}>
+                {statusConfig.label}
+              </Badge>
+              <Badge variant="outline" className={priorityConfig.color}>
+                {priorityConfig.label}
+              </Badge>
+            </div>
+            {/* AI Assistant Button (Detail-only mode) */}
+            {viewMode === 'detail-only' && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setIsAiChatOpen(true)}
+                className="h-8 gap-1.5 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+              >
+                <Sparkles className="size-4" />
+                AI 어시스턴트
+              </Button>
+            )}
           </div>
           <h2 className="text-lg font-bold text-gray-900 mb-2 line-clamp-2">
             {request.title}
@@ -368,100 +407,115 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
           </Link>
         </div>
 
-        {/* Description */}
-        <div className="p-4 border-b border-gray-100">
-          <h3 className="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1">
-            <FileText className="size-3" />
-            요청 내용
-          </h3>
-          <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-            {request.description}
-          </p>
-        </div>
-
-        {/* Meta Info */}
-        <div className="p-4 border-b border-gray-100 space-y-3">
-          <div className="flex items-center gap-2 text-sm">
-            <User className="size-4 text-gray-400" />
-            <span className="text-gray-500">요청자:</span>
-            <span className="text-gray-900 font-medium">
-              {request.requester?.full_name || request.requester?.email}
-            </span>
+        {/* Scrollable Content Area */}
+        <div className="flex-1 overflow-y-auto">
+          {/* Description */}
+          <div className="p-4 border-b border-gray-100">
+            <h3 className="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1">
+              <FileText className="size-3" />
+              요청 내용
+            </h3>
+            <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+              {request.description}
+            </p>
           </div>
-          {/* SR 구분 (대분류/소분류) */}
-          <div className="flex items-center gap-2 text-sm">
-            <Tag className="size-4 text-gray-400" />
-            <span className="text-gray-500">SR 구분:</span>
-            {request.category_lv1?.name ? (
-              <span className="text-gray-900">
-                {request.category_lv1.name}
-                {request.category_lv2?.name && ` / ${request.category_lv2.name}`}
+
+          {/* Meta Info */}
+          <div className="p-4 border-b border-gray-100 space-y-3">
+            <div className="flex items-center gap-2 text-sm">
+              <User className="size-4 text-gray-400" />
+              <span className="text-gray-500">요청자:</span>
+              <span className="text-gray-900 font-medium">
+                {request.requester?.full_name || request.requester?.email}
               </span>
-            ) : (
-              <span className="text-gray-400">미분류</span>
+            </div>
+            {/* SR 구분 (대분류/소분류) */}
+            <div className="flex items-center gap-2 text-sm">
+              <Tag className="size-4 text-gray-400" />
+              <span className="text-gray-500">SR 구분:</span>
+              {request.category_lv1?.name ? (
+                <span className="text-gray-900">
+                  {request.category_lv1.name}
+                  {request.category_lv2?.name && ` / ${request.category_lv2.name}`}
+                </span>
+              ) : (
+                <span className="text-gray-400">미분류</span>
+              )}
+            </div>
+            {request.system && (
+              <div className="flex items-center gap-2 text-sm">
+                <Server className="size-4 text-gray-400" />
+                <span className="text-gray-500">시스템:</span>
+                <span className="text-gray-900">
+                  {request.system.name}
+                  {request.module?.name && (
+                    <span className="text-gray-500"> / {request.module.name}</span>
+                  )}
+                </span>
+              </div>
+            )}
+            <div className="flex items-center gap-2 text-sm">
+              <Calendar className="size-4 text-gray-400" />
+              <span className="text-gray-500">신청일:</span>
+              <span className="text-gray-900">
+                {createdDate.toLocaleDateString('ko-KR', {
+                  year: 'numeric',
+                  month: 'short',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}
+              </span>
+            </div>
+
+            {/* 공수 정보 표시 */}
+            {(request.estimated_fp || request.actual_fp || request.estimated_md || request.actual_md) && (
+              <div className="mt-3 p-3 rounded-lg bg-emerald-50 border border-emerald-200">
+                <div className="flex items-center gap-2 text-xs font-medium text-emerald-700 mb-2">
+                  <Calculator className="size-3" />
+                  공수 정보
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  {(request.estimated_fp != null || request.actual_fp != null) && (
+                    <div>
+                      <span className="text-emerald-600 block">FP</span>
+                      <span className="text-gray-700">
+                        {request.estimated_fp != null && `예상:${request.estimated_fp}`}
+                        {request.estimated_fp != null && request.actual_fp != null && ' / '}
+                        {request.actual_fp != null && `실제:${request.actual_fp}`}
+                      </span>
+                    </div>
+                  )}
+                  {(request.estimated_md != null || request.actual_md != null) && (
+                    <div>
+                      <span className="text-emerald-600 block">MD</span>
+                      <span className="text-gray-700">
+                        {request.estimated_md != null && `예상:${request.estimated_md}`}
+                        {request.estimated_md != null && request.actual_md != null && ' / '}
+                        {request.actual_md != null && `실제:${request.actual_md}`}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
           </div>
-          {request.system && (
-            <div className="flex items-center gap-2 text-sm">
-              <Server className="size-4 text-gray-400" />
-              <span className="text-gray-500">시스템:</span>
-              <span className="text-gray-900">
-                {request.system.name}
-                {request.module?.name && (
-                  <span className="text-gray-500"> / {request.module.name}</span>
-                )}
-              </span>
-            </div>
-          )}
-          <div className="flex items-center gap-2 text-sm">
-            <Calendar className="size-4 text-gray-400" />
-            <span className="text-gray-500">신청일:</span>
-            <span className="text-gray-900">
-              {createdDate.toLocaleDateString('ko-KR', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-              })}
-            </span>
-          </div>
 
-          {/* 공수 정보 표시 */}
-          {(request.estimated_fp || request.actual_fp || request.estimated_md || request.actual_md) && (
-            <div className="mt-3 p-3 rounded-lg bg-emerald-50 border border-emerald-200">
-              <div className="flex items-center gap-2 text-xs font-medium text-emerald-700 mb-2">
-                <Calculator className="size-3" />
-                공수 정보
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                {(request.estimated_fp != null || request.actual_fp != null) && (
-                  <div>
-                    <span className="text-emerald-600 block">FP</span>
-                    <span className="text-gray-700">
-                      {request.estimated_fp != null && `예상:${request.estimated_fp}`}
-                      {request.estimated_fp != null && request.actual_fp != null && ' / '}
-                      {request.actual_fp != null && `실제:${request.actual_fp}`}
-                    </span>
-                  </div>
-                )}
-                {(request.estimated_md != null || request.actual_md != null) && (
-                  <div>
-                    <span className="text-emerald-600 block">MD</span>
-                    <span className="text-gray-700">
-                      {request.estimated_md != null && `예상:${request.estimated_md}`}
-                      {request.estimated_md != null && request.actual_md != null && ' / '}
-                      {request.actual_md != null && `실제:${request.actual_md}`}
-                    </span>
-                  </div>
-                )}
-              </div>
+          {/* Similar Cases Panel (Only in full mode) */}
+          {viewMode === 'full' && (
+            <div className="p-4 border-t border-gray-100">
+              <SimilarCasesPanel
+                requestId={request.id}
+                requestTitle={request.title}
+                requestDescription={request.description}
+                systemName={request.system?.name}
+              />
             </div>
           )}
         </div>
 
-        {/* Quick Actions */}
-        <div className="p-4 space-y-2">
+        {/* Quick Actions (Fixed at bottom) */}
+        <div className="p-4 border-t border-gray-100 bg-white shrink-0 space-y-2">
           <h3 className="text-xs font-semibold text-gray-500 mb-3">빠른 작업</h3>
 
           {/* 요청 정보 수정 버튼 */}
@@ -760,34 +814,60 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
             </Button>
           )}
         </div>
+      </div>
 
-        {/* Similar Cases Panel */}
-        <div className="p-4 border-t border-gray-100">
-          <SimilarCasesPanel
+      {/* AI Chat Panel (Full mode or Popup) */}
+      {viewMode === 'full' ? (
+        <div className="flex-1 overflow-hidden">
+          <ManagerAiChat
             requestId={request.id}
-            requestTitle={request.title}
-            requestDescription={request.description}
-            systemName={request.system?.name}
+            requestContext={{
+              title: request.title,
+              description: request.description,
+              priority: request.priority,
+              requesterName: request.requester?.full_name || request.requester?.email,
+              systemName: request.system?.name,
+              moduleName: request.module?.name,
+              category_lv1_name: request.category_lv1?.name,
+              category_lv2_name: request.category_lv2?.name
+            }}
           />
         </div>
-      </div>
-
-      {/* AI Chat Panel - 새로운 분리된 담당자 채팅 컴포넌트 */}
-      <div className="flex-1 overflow-hidden">
-        <ManagerAiChat
-          requestId={request.id}
-          requestContext={{
-            title: request.title,
-            description: request.description,
-            priority: request.priority,
-            requesterName: request.requester?.full_name || request.requester?.email,
-            systemName: request.system?.name,
-            moduleName: request.module?.name,
-            category_lv1_name: request.category_lv1?.name,
-            category_lv2_name: request.category_lv2?.name
-          }}
-        />
-      </div>
+      ) : (
+        /* AI Assistant Popup */
+        isAiChatOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[80vh] flex flex-col overflow-hidden border border-gray-200">
+              <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-white shrink-0">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
+                    <Sparkles className="size-4 text-white" />
+                  </div>
+                  <h3 className="font-bold text-gray-900">AI 어시스턴트</h3>
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => setIsAiChatOpen(false)}>
+                  <X className="size-5" />
+                </Button>
+              </div>
+              <div className="flex-1 overflow-hidden">
+                <ManagerAiChat
+                  requestId={request.id}
+                  requestContext={{
+                    title: request.title,
+                    description: request.description,
+                    priority: request.priority,
+                    requesterName: request.requester?.full_name || request.requester?.email,
+                    systemName: request.system?.name,
+                    moduleName: request.module?.name,
+                    category_lv1_name: request.category_lv1?.name,
+                    category_lv2_name: request.category_lv2?.name
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        )
+      )}
 
       {/* 원본 채팅 조회 모달 */}
       <OriginalChatModal
@@ -856,4 +936,3 @@ export function WorkspaceRequestDetail({ request, currentUserId, onStatusChange 
     </div>
   )
 }
-

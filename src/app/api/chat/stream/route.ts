@@ -57,10 +57,10 @@ async function getSystemModuleList(supabase: Awaited<ReturnType<typeof createCli
   }
 
   const modulesBySystem = new Map<string, string[]>()
-  for (const module of modules || []) {
-    const list = modulesBySystem.get(module.system_id) || []
-    list.push(module.name)
-    modulesBySystem.set(module.system_id, list)
+  for (const mod of modules || []) {
+    const list = modulesBySystem.get(mod.system_id) || []
+    list.push(mod.name)
+    modulesBySystem.set(mod.system_id, list)
   }
 
   const lines: string[] = []

@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { cn } from '@/lib/utils'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -12,9 +11,7 @@ import {
   ArrowDown,
   Clock,
   User,
-  Server,
   ChevronRight,
-  Inbox,
   CheckCircle2,
   Bot,
   Sparkles,
@@ -23,7 +20,6 @@ import {
   Package,
   X
 } from 'lucide-react'
-import Link from 'next/link'
 import { WorkspaceRequestDetail } from './workspace-request-detail'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -67,8 +63,6 @@ export type AssignedRequest = {
 
 interface RequestListProps {
   myRequests: AssignedRequest[]
-  unassignedRequests: AssignedRequest[]
-  recentCompletedRequests: AssignedRequest[]
   testAssignedRequests?: AssignedRequest[]
   deployAssignedRequests?: AssignedRequest[]
   currentUserId: string
@@ -108,8 +102,6 @@ const PRIORITY_CONFIG = {
 
 export function RequestList({
   myRequests: initialMyRequests,
-  unassignedRequests: initialUnassignedRequests,
-  recentCompletedRequests: initialRecentCompletedRequests,
   testAssignedRequests: initialTestAssignedRequests = [],
   deployAssignedRequests: initialDeployAssignedRequests = [],
   currentUserId
@@ -118,13 +110,11 @@ export function RequestList({
 
   // 로컬 상태로 목록 관리 (실시간 업데이트 지원)
   const [myRequests, setMyRequests] = useState(initialMyRequests)
-  const [unassignedRequests, setUnassignedRequests] = useState(initialUnassignedRequests)
-  const [recentCompletedRequests, setRecentCompletedRequests] = useState(initialRecentCompletedRequests)
   const [testAssignedRequests, setTestAssignedRequests] = useState(initialTestAssignedRequests)
   const [deployAssignedRequests, setDeployAssignedRequests] = useState(initialDeployAssignedRequests)
 
   const [selectedRequest, setSelectedRequest] = useState<AssignedRequest | null>(
-    initialMyRequests[0] || initialTestAssignedRequests[0] || initialDeployAssignedRequests[0] || initialUnassignedRequests[0] || null
+    initialMyRequests[0] || initialTestAssignedRequests[0] || initialDeployAssignedRequests[0] || null
   )
 
   // 일괄 배포 관련 상태
@@ -147,11 +137,9 @@ export function RequestList({
   // props 변경 시 상태 동기화
   useEffect(() => {
     setMyRequests(initialMyRequests)
-    setUnassignedRequests(initialUnassignedRequests)
-    setRecentCompletedRequests(initialRecentCompletedRequests)
     setTestAssignedRequests(initialTestAssignedRequests)
     setDeployAssignedRequests(initialDeployAssignedRequests)
-  }, [initialMyRequests, initialUnassignedRequests, initialRecentCompletedRequests, initialTestAssignedRequests, initialDeployAssignedRequests])
+  }, [initialMyRequests, initialTestAssignedRequests, initialDeployAssignedRequests])
 
   // 요청 제거 핸들러 (위임된 작업 완료 시)
   const handleRequestRemove = useCallback((requestId: string, listType: 'test' | 'deploy' | 'my') => {
@@ -165,11 +153,11 @@ export function RequestList({
 
     // 선택된 요청이 제거된 경우 다음 요청 선택
     if (selectedRequest?.id === requestId) {
-      const allRequests = [...myRequests, ...testAssignedRequests, ...deployAssignedRequests, ...unassignedRequests]
+      const allRequests = [...myRequests, ...testAssignedRequests, ...deployAssignedRequests]
       const remaining = allRequests.filter(r => r.id !== requestId)
       setSelectedRequest(remaining[0] || null)
     }
-  }, [selectedRequest, myRequests, testAssignedRequests, deployAssignedRequests, unassignedRequests])
+  }, [selectedRequest, myRequests, testAssignedRequests, deployAssignedRequests])
 
   // 요청이 어느 목록에 속하는지 확인
   const getRequestListType = useCallback((requestId: string): 'test' | 'deploy' | 'my' | null => {
@@ -331,12 +319,12 @@ export function RequestList({
         exitMultiSelectMode()
         router.refresh()
       }
-    } catch (error) {
+    } catch {
       toast.error('일괄 배포 요청 중 오류가 발생했습니다.')
     } finally {
       setIsBatchLoading(false)
     }
-  }, [selectedForBatch, selectedRequest, exitMultiSelectMode, router])
+  }, [selectedForBatch, selectedRequest, currentUserId, exitMultiSelectMode, router])
 
   // 일괄 배포 모달에서 요청 제거
   const handleRemoveFromBatch = useCallback((requestId: string) => {
@@ -374,11 +362,11 @@ export function RequestList({
   return (
     <div className="flex h-full overflow-hidden">
       {/* Left: Request List */}
-      <div className="w-[400px] shrink-0 bg-white border-r border-gray-200 flex flex-col overflow-hidden">
+      <div className="w-[320px] shrink-0 bg-white border-r border-gray-200 flex flex-col overflow-hidden">
         {/* Tab-like sections */}
         <div className="flex-1 overflow-y-auto">
           {/* My Assigned Requests */}
-          <div className="p-4 border-b border-gray-100">
+          <div className="p-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-gray-500 flex items-center gap-2">
                 <div className="w-5 h-5 rounded bg-indigo-100 flex items-center justify-center">
@@ -489,125 +477,40 @@ export function RequestList({
               </div>
             )}
           </div>
-
-          {/* 테스트 담당 위임 요청 */}
-          {testAssignedRequests.length > 0 && (
-            <div className="p-4 border-b border-gray-100">
-              <h3 className="text-sm font-semibold text-gray-500 mb-3 flex items-center gap-2">
-                <div className="w-5 h-5 rounded bg-orange-100 flex items-center justify-center">
-                  <TestTube2 className="size-3 text-orange-600" />
-                </div>
-                테스트 요청 ({testAssignedRequests.length})
-              </h3>
-              <div className="space-y-2">
-                {testAssignedRequests.map(request => (
-                  <RequestItem
-                    key={request.id}
-                    request={request}
-                    isSelected={selectedRequest?.id === request.id}
-                    onClick={() => setSelectedRequest(request)}
-                    priority={request.priority as keyof typeof PRIORITY_CONFIG}
-                    delegationType="test"
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* 배포 승인 위임 요청 */}
-          {deployAssignedRequests.length > 0 && (
-            <div className="p-4 border-b border-gray-100">
-              <h3 className="text-sm font-semibold text-gray-500 mb-3 flex items-center gap-2">
-                <div className="w-5 h-5 rounded bg-cyan-100 flex items-center justify-center">
-                  <Rocket className="size-3 text-cyan-600" />
-                </div>
-                배포 승인 요청 ({deployAssignedRequests.length})
-              </h3>
-              <div className="space-y-2">
-                {deployAssignedRequests.map(request => (
-                  <RequestItem
-                    key={request.id}
-                    request={request}
-                    isSelected={selectedRequest?.id === request.id}
-                    onClick={() => setSelectedRequest(request)}
-                    priority={request.priority as keyof typeof PRIORITY_CONFIG}
-                    delegationType="deploy"
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Unassigned Requests */}
-          {unassignedRequests.length > 0 && (
-            <div className="p-4 border-b border-gray-100">
-              <h3 className="text-sm font-semibold text-gray-500 mb-3 flex items-center gap-2">
-                <div className="w-5 h-5 rounded bg-amber-100 flex items-center justify-center">
-                  <Inbox className="size-3 text-amber-600" />
-                </div>
-                배정 대기 ({unassignedRequests.length})
-              </h3>
-              <div className="space-y-2">
-                {unassignedRequests.slice(0, 5).map(request => (
-                  <RequestItem
-                    key={request.id}
-                    request={request}
-                    isSelected={selectedRequest?.id === request.id}
-                    onClick={() => setSelectedRequest(request)}
-                    priority={request.priority as keyof typeof PRIORITY_CONFIG}
-                    showAssignButton
-                  />
-                ))}
-                {unassignedRequests.length > 5 && (
-                  <Link
-                    href="/requests"
-                    className="block text-center text-sm text-gray-500 hover:text-gray-700 py-2"
-                  >
-                    +{unassignedRequests.length - 5}개 더 보기
-                  </Link>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Recent Completed */}
-          {recentCompletedRequests.length > 0 && (
-            <div className="p-4">
-              <h3 className="text-sm font-semibold text-gray-500 mb-3 flex items-center gap-2">
-                <div className="w-5 h-5 rounded bg-emerald-100 flex items-center justify-center">
-                  <CheckCircle2 className="size-3 text-emerald-600" />
-                </div>
-                최근 완료 ({recentCompletedRequests.length})
-              </h3>
-              <div className="space-y-2">
-                {recentCompletedRequests.slice(0, 3).map(request => (
-                  <RequestItem
-                    key={request.id}
-                    request={request}
-                    isSelected={selectedRequest?.id === request.id}
-                    onClick={() => setSelectedRequest(request)}
-                    priority={request.priority as keyof typeof PRIORITY_CONFIG}
-                    completed
-                  />
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
-      {/* Right: Detail + AI Chat */}
-      <div className="flex-1 overflow-hidden">
+      {/* Middle: Detail (50% of total) */}
+      <div className="w-[50%] shrink-0 border-r border-gray-200 bg-white flex flex-col overflow-hidden">
         {selectedRequest ? (
           <WorkspaceRequestDetail
             request={selectedRequest}
             currentUserId={currentUserId}
             onStatusChange={handleRequestStatusChange}
+            viewMode="detail-only"
           />
         ) : (
-          <EmptyState />
+          <div className="flex-1 flex items-center justify-center bg-gray-50">
+            <EmptyState />
+          </div>
         )}
       </div>
+
+      {/* Right: AI Chat / Similar Cases (Remaining) */}
+      <div className="flex-1 bg-gray-50 overflow-y-auto">
+        {selectedRequest ? (
+          <div className="p-4 h-full flex flex-col">
+            <WorkspaceRequestDetail
+              request={selectedRequest}
+              currentUserId={currentUserId}
+              onStatusChange={handleRequestStatusChange}
+              viewMode="side-panel"
+            />
+          </div>
+        ) : null}
+      </div>
+
+      {/* 일괄 배포 모달 */}
 
       {/* 일괄 배포 모달 */}
       <BatchDeployModal
@@ -629,7 +532,6 @@ function RequestItem({
   isSelected,
   onClick,
   priority,
-  showAssignButton = false,
   completed = false,
   delegationType,
   isMultiSelectMode = false,
@@ -641,7 +543,6 @@ function RequestItem({
   isSelected: boolean
   onClick: () => void
   priority: keyof typeof PRIORITY_CONFIG
-  showAssignButton?: boolean
   completed?: boolean
   delegationType?: 'test' | 'deploy'
   isMultiSelectMode?: boolean
@@ -654,7 +555,8 @@ function RequestItem({
 
   // 클라이언트에서만 시간 계산 (Hydration mismatch 방지)
   useEffect(() => {
-    setTimeAgo(getTimeAgo(request.created_at))
+    const updateTime = () => setTimeAgo(getTimeAgo(request.created_at))
+    updateTime()
   }, [request.created_at])
 
   // 위임 타입에 따른 스타일
@@ -788,7 +690,7 @@ function EmptyState() {
   return (
     <div className="flex items-center justify-center h-full bg-gray-50">
       <div className="text-center max-w-md">
-        <div className="inline-flex size-20 items-center justify-center rounded-3xl bg-gradient-to-br from-indigo-100 to-purple-100 mb-6">
+        <div className="inline-flex size-20 items-center justify-center rounded-3xl bg-linear-to-br from-indigo-100 to-purple-100 mb-6">
           <Sparkles className="size-10 text-indigo-600" />
         </div>
         <h2 className="text-2xl font-bold text-gray-900 mb-3">
