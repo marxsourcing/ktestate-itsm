@@ -20,9 +20,11 @@ export default async function RequestsPage() {
     .eq('id', user.id)
     .single()
 
-  const isManager = profile?.role === 'manager' || profile?.role === 'admin'
+  const isAdmin = profile?.role === 'admin'
+  const isManagerOnly = profile?.role === 'manager'
+  const isManager = isManagerOnly || isAdmin // UI용 (관리 권한 여부)
 
-  // 요청 목록 조회 (관리자는 전체, 일반 유저는 본인 것만)
+  // 요청 목록 조회 (관리자: 전체, 담당자: 배정된 건, 요청자: 본인 건)
   let query = supabase
     .from('service_requests')
     .select(`
@@ -32,28 +34,75 @@ export default async function RequestsPage() {
       requester:profiles!service_requests_requester_id_fkey(full_name, email),
       manager:profiles!service_requests_manager_id_fkey(full_name, email),
       category_lv1:request_categories_lv1(id, name),
-      category_lv2:request_categories_lv2(id, name)
+      category_lv2:request_categories_lv2(id, name),
+      comments:sr_comments(count)
     `)
     .order('created_at', { ascending: false })
 
-  if (!isManager) {
+  if (isAdmin) {
+    // 모든 요청 노출
+  } else if (isManagerOnly) {
+    query = query.eq('manager_id', user.id)
+  } else {
     query = query.eq('requester_id', user.id)
   }
 
   const { data: requests } = await query
 
+  // 작성중인 대화(Conversations) 조회 (본인이 시작한 대화 중 아직 요청으로 확정되지 않고 삭제되지 않은 건)
+  let drafts: Request[] = []
+  
+  const { data: conversationDrafts } = await supabase
+    .from('conversations')
+    .select('*')
+    .eq('user_id', user.id)
+    .is('request_id', null)
+    .is('deleted_at', null) // 삭제된 대화 제외
+    .order('created_at', { ascending: false })
+  
+  if (conversationDrafts) {
+    drafts = conversationDrafts.map(d => ({
+      id: d.id,
+      title: d.title || '작성 중인 요청',
+      description: '채팅을 통해 요청을 작성 중입니다.',
+      status: 'draft_chat',
+      priority: 'medium',
+      created_at: d.created_at,
+      is_chat_draft: true
+    }))
+  }
+
+  // 모든 데이터 통합 (기존 DB의 status: 'draft' 건 포함)
+  const allRequests = [
+    ...drafts,
+    ...(requests || [])
+  ]
+
   // 통계 계산
-  const stats = {
-    total: requests?.length || 0,
-    requested: requests?.filter(r => r.status === 'requested').length || 0,
-    processing: requests?.filter(r => r.status === 'reviewing' || r.status === 'processing').length || 0,
-    completed: requests?.filter(r => r.status === 'completed').length || 0,
+  const stats = isManager ? {
+    total: allRequests.length,
+    draft: allRequests.filter(r => r.status === 'draft' || r.status === 'draft_chat').length,
+    requested: allRequests.filter(r => r.status === 'requested').length,
+    processing: allRequests.filter(r => 
+      !['draft', 'draft_chat', 'requested', 'completed', 'rejected'].includes(r.status)
+    ).length,
+    completed: allRequests.filter(r => r.status === 'completed').length,
+    rejected: allRequests.filter(r => r.status === 'rejected').length,
+  } : {
+    total: allRequests.length,
+    draft: allRequests.filter(r => r.status === 'draft' || r.status === 'draft_chat').length,
+    requested: 0, // 요청자 모드에서는 진행중으로 통합
+    processing: allRequests.filter(r => 
+      !['draft', 'draft_chat', 'completed', 'rejected'].includes(r.status)
+    ).length,
+    completed: allRequests.filter(r => r.status === 'completed').length,
+    rejected: allRequests.filter(r => r.status === 'rejected').length,
   }
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-gray-50">
       {/* Header */}
-      <div className="flex-shrink-0 bg-white border-b border-gray-200 px-6 py-4">
+      <div className="shrink-0 bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex flex-col sm:flex-row sm:items-center gap-4">
           {/* Title & Stats */}
           <div className="flex-1">
@@ -62,9 +111,11 @@ export default async function RequestsPage() {
             </h1>
             <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
               <span>전체 <strong className="text-gray-900">{stats.total}</strong></span>
-              <span>대기 <strong className="text-amber-600">{stats.requested}</strong></span>
+              <span>작성중 <strong className="text-gray-600">{stats.draft}</strong></span>
+              {isManager && <span>대기 <strong className="text-amber-600">{stats.requested}</strong></span>}
               <span>진행 <strong className="text-blue-600">{stats.processing}</strong></span>
               <span>완료 <strong className="text-emerald-600">{stats.completed}</strong></span>
+              <span>반려 <strong className="text-rose-600">{stats.rejected}</strong></span>
             </div>
           </div>
 
@@ -83,7 +134,8 @@ export default async function RequestsPage() {
       {/* Kanban Board - 조회 전용 (드래그앤드롭 상태 변경 비활성화) */}
       <div className="flex-1 overflow-hidden p-6">
         <KanbanBoard
-          requests={(requests as Request[]) || []}
+          requests={(allRequests as Request[]) || []}
+          isManager={isManager}
         />
       </div>
     </div>

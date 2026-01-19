@@ -4,9 +4,8 @@ import { useState, useCallback, useEffect } from 'react'
 import { ChatMessages, Message } from '@/components/chat/chat-messages'
 import { ChatInput } from '@/components/chat/chat-input'
 import { createClient } from '@/lib/supabase/client'
-import { addMessage, updateConversationTitle, createConversation } from '@/app/chat/actions'
-import { Bot, Sparkles, ArrowRight } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { addMessage, createConversation } from '@/app/chat/actions'
+import { Bot, Sparkles, ArrowRight, Lock } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface RequestChatAreaProps {
@@ -15,6 +14,8 @@ interface RequestChatAreaProps {
   initialMessages: Message[]
   requestTitle: string
   requestDescription: string
+  readOnly?: boolean
+  isLocked?: boolean
 }
 
 // AI 활용 제안 옵션
@@ -50,7 +51,9 @@ export function RequestChatArea({
   conversationId: initialConversationId,
   initialMessages, 
   requestTitle,
-  requestDescription 
+  requestDescription,
+  readOnly = false,
+  isLocked = false
 }: RequestChatAreaProps) {
   const [conversationId, setConversationId] = useState<string | undefined>(initialConversationId)
   const [messages, setMessages] = useState<Message[]>(initialMessages)
@@ -89,10 +92,10 @@ export function RequestChatArea({
   }, [conversationId])
 
   const sendMessage = useCallback(async (content: string) => {
+    if (readOnly) return
     setIsLoading(true)
 
     try {
-      // 대화가 없으면 새로 생성
       let activeConversationId = conversationId
       if (!activeConversationId) {
         const result = await createConversation(requestTitle, requestId)
@@ -107,13 +110,11 @@ export function RequestChatArea({
         throw new Error('대화 ID를 가져올 수 없습니다.')
       }
 
-      // 사용자 메시지 추가
       const userResult = await addMessage(activeConversationId, 'user', content)
       if (userResult.message) {
         setMessages((prev) => [...prev, userResult.message as Message])
       }
 
-      // AI 응답 요청 (요청 컨텍스트 포함)
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -136,7 +137,6 @@ export function RequestChatArea({
 
       const aiResponse = await response.json()
       
-      // AI 응답 메시지 추가
       const aiResult = await addMessage(
         activeConversationId,
         'assistant',
@@ -159,78 +159,93 @@ export function RequestChatArea({
     } finally {
       setIsLoading(false)
     }
-  }, [conversationId, messages, requestId, requestTitle, requestDescription])
+  }, [conversationId, messages, requestId, requestTitle, requestDescription, readOnly])
 
   const handleSuggestionClick = (prompt: string) => {
+    if (readOnly) return
     sendMessage(prompt)
   }
 
   return (
-    <div className="flex h-full flex-col bg-gray-50">
+    <div className="flex h-full flex-col bg-white">
       {/* Header */}
-      <div className="flex-shrink-0 px-4 py-3 bg-white border-b border-gray-200">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-rose-500 to-rose-600 flex items-center justify-center">
-            <Bot className="size-4 text-white" />
+      <div className="shrink-0 px-4 py-3 bg-white border-b border-gray-200">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-linear-to-br from-rose-500 to-rose-600 flex items-center justify-center">
+              <Bot className="size-4 text-white" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-gray-900">AI 어시스턴트</h3>
+              <p className="text-xs text-gray-500">요청 처리에 도움을 드립니다</p>
+            </div>
           </div>
-          <div>
-            <h3 className="font-semibold text-gray-900">AI 어시스턴트</h3>
-            <p className="text-xs text-gray-500">요청 처리에 도움을 드립니다</p>
-          </div>
+          {readOnly && (
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-gray-100 text-gray-500 text-[11px] font-medium">
+              <Lock className="size-3" />
+              {isLocked ? '대화 종료 (진행 중)' : '읽기 전용'}
+            </div>
+          )}
         </div>
       </div>
 
       {/* Messages or Empty State */}
       {messages.length === 0 && !isLoading ? (
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
           <div className="max-w-2xl mx-auto">
             {/* Welcome Message */}
             <div className="text-center mb-8">
-              <div className="inline-flex size-16 items-center justify-center rounded-2xl bg-gradient-to-br from-rose-100 to-rose-200 mb-4">
+              <div className="inline-flex size-16 items-center justify-center rounded-2xl bg-linear-to-br from-rose-100 to-rose-200 mb-4">
                 <Sparkles className="size-8 text-rose-600" />
               </div>
               <h2 className="text-xl font-semibold text-gray-900 mb-2">
-                이 요청에 대해 도움이 필요하신가요?
+                {readOnly ? 'AI와의 대화 내역' : '이 요청에 대해 도움이 필요하신가요?'}
               </h2>
               <p className="text-gray-500 text-sm">
-                AI 어시스턴트가 요청 처리를 도와드립니다. 아래 옵션을 선택하거나 직접 질문해보세요.
+                {isLocked
+                  ? '요청이 진행 중(접수 이후)이므로 추가 대화가 제한됩니다.'
+                  : readOnly 
+                    ? '요청자가 AI와 나눈 대화 내용을 확인할 수 있습니다.' 
+                    : 'AI 어시스턴트가 요청 처리를 도와드립니다. 아래 옵션을 선택하거나 직접 질문해보세요.'}
               </p>
             </div>
 
-            {/* Suggestion Cards */}
-            <div className="grid grid-cols-2 gap-3">
-              {AI_SUGGESTIONS.map((suggestion, index) => (
-                <button
-                  key={index}
-                  onClick={() => handleSuggestionClick(suggestion.prompt)}
-                  disabled={isLoading}
-                  className={cn(
-                    'p-4 rounded-xl border bg-white text-left transition-all group',
-                    'hover:border-rose-300 hover:shadow-md hover:-translate-y-0.5',
-                    'disabled:opacity-50 disabled:cursor-not-allowed'
-                  )}
-                >
-                  <div className="flex items-start gap-3">
-                    <span className="text-2xl">{suggestion.icon}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-gray-900 group-hover:text-rose-600 transition-colors">
-                        {suggestion.title}
+            {/* Suggestion Cards (Only if NOT readOnly) */}
+            {!readOnly && (
+              <div className="grid grid-cols-2 gap-3">
+                {AI_SUGGESTIONS.map((suggestion, index) => (
+                  <button
+                    key={index}
+                    onClick={() => handleSuggestionClick(suggestion.prompt)}
+                    disabled={isLoading}
+                    className={cn(
+                      'p-4 rounded-xl border bg-white text-left transition-all group',
+                      'hover:border-rose-300 hover:shadow-md hover:-translate-y-0.5',
+                      'disabled:opacity-50 disabled:cursor-not-allowed'
+                    )}
+                  >
+                    <div className="flex items-start gap-3">
+                      <span className="text-2xl">{suggestion.icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-gray-900 group-hover:text-rose-600 transition-colors">
+                          {suggestion.title}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-0.5">
+                          {suggestion.description}
+                        </div>
                       </div>
-                      <div className="text-xs text-gray-500 mt-0.5">
-                        {suggestion.description}
-                      </div>
+                      <ArrowRight className="size-4 text-gray-300 group-hover:text-rose-400 group-hover:translate-x-1 transition-all" />
                     </div>
-                    <ArrowRight className="size-4 text-gray-300 group-hover:text-rose-400 group-hover:translate-x-1 transition-all" />
-                  </div>
-                </button>
-              ))}
-            </div>
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* Context Info */}
-            <div className="mt-6 p-4 rounded-lg bg-rose-50 border border-rose-100">
-              <p className="text-xs text-rose-600 font-medium mb-1">현재 요청 컨텍스트</p>
+            <div className="mt-6 p-4 rounded-lg bg-white border border-gray-200 shadow-sm">
+              <p className="text-xs text-rose-600 font-medium mb-1">현재 요청 정보</p>
               <p className="text-sm text-gray-700 font-medium">{requestTitle}</p>
-              <p className="text-xs text-gray-500 mt-1 line-clamp-2">{requestDescription}</p>
+              <p className="text-xs text-gray-500 mt-1 line-clamp-3 leading-relaxed">{requestDescription}</p>
             </div>
           </div>
         </div>
@@ -239,17 +254,23 @@ export function RequestChatArea({
           messages={messages}
           isLoading={isLoading}
           excludeRequestId={requestId}
+          hideCards={true} // 상세 페이지에서도 카드는 우측 패널에 별도 노출
         />
       )}
 
       {/* Input */}
       <ChatInput
         onSend={sendMessage}
-        disabled={false}
+        disabled={readOnly || isLoading}
         isLoading={isLoading}
-        placeholder="AI에게 질문하거나 도움을 요청하세요..."
+        placeholder={
+          isLocked 
+            ? "요청이 진행 중이어서 대화할 수 없습니다." 
+            : readOnly 
+              ? "요청자만 AI와 대화할 수 있습니다." 
+              : "AI에게 질문하거나 도움을 요청하세요..."
+        }
       />
     </div>
   )
 }
-

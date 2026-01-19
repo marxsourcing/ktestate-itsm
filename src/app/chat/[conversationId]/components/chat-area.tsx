@@ -2,23 +2,33 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { ChatMessages, Message, RequirementData } from '@/components/chat/chat-messages'
+import { ChatMessages, Message } from '@/components/chat/chat-messages'
+import { RequirementData } from '@/components/chat/requirement-card'
 import { ChatInput } from '@/components/chat/chat-input'
 import { createClient } from '@/lib/supabase/client'
-import { addMessage, updateConversationTitle, updateMessageMetadata } from '@/app/chat/actions'
+import { addMessage, updateConversationTitle } from '@/app/chat/actions'
 import type { AttachmentData } from '@/app/chat/attachments'
+import { cn } from '@/lib/utils'
 
 interface ChatAreaProps {
   conversationId: string
-  initialMessages: Message[]
+  messages: Message[]
+  setMessages: React.Dispatch<React.SetStateAction<Message[]>>
   conversationStatus: string
   linkedRequestId?: string | null  // 이 대화에 연결된 요청 ID (확정된 경우)
+  onRequirementUpdate: (data: RequirementData) => void
 }
 
-export function ChatArea({ conversationId, initialMessages, conversationStatus, linkedRequestId }: ChatAreaProps) {
+export function ChatArea({ 
+  conversationId, 
+  messages, 
+  setMessages, 
+  conversationStatus, 
+  linkedRequestId,
+  onRequirementUpdate
+}: ChatAreaProps) {
   const searchParams = useSearchParams()
-  const [messages, setMessages] = useState<Message[]>(initialMessages)
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLocalLoading, setIsLocalLoading] = useState(false)
   const initialMessageSentRef = useRef(false)
 
   // 실시간 메시지 구독
@@ -49,12 +59,12 @@ export function ChatArea({ conversationId, initialMessages, conversationStatus, 
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [conversationId])
+  }, [conversationId, setMessages])
 
   const sendMessage = useCallback(async (content: string, attachments?: AttachmentData[]) => {
     if (conversationStatus === 'confirmed') return
 
-    setIsLoading(true)
+    setIsLocalLoading(true)
 
     try {
       // 사용자 메시지의 metadata (첨부파일 포함)
@@ -74,7 +84,7 @@ export function ChatArea({ conversationId, initialMessages, conversationStatus, 
         await updateConversationTitle(conversationId, title)
       }
 
-      // AI 응답 요청 (일반 JSON 방식 - 배포 환경 안정성 확보)
+      // AI 응답 요청 (일반 JSON 방식)
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -133,11 +143,11 @@ export function ChatArea({ conversationId, initialMessages, conversationStatus, 
       }
       setMessages((prev) => [...prev, errorMessage])
     } finally {
-      setIsLoading(false)
+      setIsLocalLoading(false)
     }
-  }, [conversationId, messages, conversationStatus])
+  }, [conversationId, messages, conversationStatus, setMessages])
 
-  // URL에서 초기 메시지 확인 및 전송 (함수 준비 시점 최적화)
+  // URL에서 초기 메시지 확인 및 전송
   useEffect(() => {
     const initialMessage = searchParams.get('message')
     if (initialMessage && !initialMessageSentRef.current && messages.length === 0) {
@@ -146,49 +156,15 @@ export function ChatArea({ conversationId, initialMessages, conversationStatus, 
     }
   }, [searchParams, messages.length, sendMessage])
 
-  // 요구사항 카드 편집 핸들러
-  const handleRequirementUpdate = useCallback(async (data: RequirementData) => {
-    // 마지막 요구사항 카드가 있는 메시지 찾기
-    const lastCardMessage = messages.findLast((m) => m.metadata?.requirementCard)
-    if (!lastCardMessage) return
-
-    const messageId = lastCardMessage.id
-    const updatedMetadata = {
-      ...lastCardMessage.metadata,
-      requirementCard: data,
-    }
-
-    // 로컬 상태 업데이트
-    setMessages((prev) => {
-      const lastCardIndex = prev.findLastIndex((m) => m.metadata?.requirementCard)
-      if (lastCardIndex === -1) return prev
-
-      const updated = [...prev]
-      updated[lastCardIndex] = {
-        ...updated[lastCardIndex],
-        metadata: updatedMetadata,
-      }
-      return updated
-    })
-
-    // DB 업데이트
-    if (!messageId.startsWith('ai-') && !messageId.startsWith('error-')) {
-      const result = await updateMessageMetadata(messageId, updatedMetadata)
-      if (result.error) {
-        console.error('메타데이터 저장 실패:', result.error)
-      }
-    }
-  }, [messages])
-
   const isConfirmed = conversationStatus === 'confirmed'
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col bg-white">
       {/* Messages or empty state */}
-      {messages.length === 0 && !isLoading ? (
-        <div className="flex flex-1 flex-col items-center justify-center px-4">
+      {messages.length === 0 && !isLocalLoading ? (
+        <div className="flex flex-1 flex-col items-center justify-center px-4 bg-gray-50">
           <div className="max-w-md text-center">
-            <div className="mb-6 inline-flex size-16 items-center justify-center rounded-2xl kt-gradient shadow-lg kt-shadow">
+            <div className="mb-6 inline-flex size-16 items-center justify-center rounded-2xl bg-linear-to-br from-rose-500 to-rose-600 shadow-lg shadow-rose-200">
               <span className="text-xl font-bold text-white">KT</span>
             </div>
             <h2 className="mb-3 text-2xl font-semibold text-gray-900">
@@ -202,23 +178,36 @@ export function ChatArea({ conversationId, initialMessages, conversationStatus, 
       ) : (
         <ChatMessages
           messages={messages}
-          isLoading={isLoading}
-          onRequirementUpdate={handleRequirementUpdate}
+          isLoading={isLocalLoading}
+          onRequirementUpdate={onRequirementUpdate}
           excludeRequestId={linkedRequestId || undefined}
+          hideCards={true} // 중앙 채팅에서는 카드 숨김 (우측 패널에서만 노출)
         />
       )}
 
       {/* Input */}
-      <ChatInput
-        onSend={sendMessage}
-        disabled={isConfirmed}
-        isLoading={isLoading}
-        placeholder={
-          isConfirmed
-            ? '이 대화는 요구사항으로 확정되어 수정할 수 없습니다.'
-            : 'IT 시스템에 대한 요구사항을 입력하세요...'
-        }
-      />
+      <div className={cn(
+        "p-4 border-t transition-colors duration-300",
+        isConfirmed ? "bg-gray-50 border-gray-200" : "bg-white border-gray-100"
+      )}>
+        <ChatInput
+          onSend={sendMessage}
+          disabled={isConfirmed}
+          isLoading={isLocalLoading}
+          placeholder={
+            isConfirmed
+              ? '요구사항이 확정되어 더 이상 대화할 수 없습니다.'
+              : 'IT 시스템에 대한 요구사항을 입력하세요...'
+          }
+        />
+        {isConfirmed && linkedRequestId && (
+          <div className="mt-2 text-center">
+            <p className="text-xs text-gray-400">
+              이미 확정된 요청입니다. 상세 내용은 <a href={`/requests/${linkedRequestId}`} className="text-rose-500 hover:underline font-medium">요청 상세 페이지</a>에서 확인하세요.
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

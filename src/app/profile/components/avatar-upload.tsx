@@ -86,7 +86,7 @@ export function AvatarUpload({ currentAvatarUrl, userName }: AvatarUploadProps) 
                 className="size-24 rounded-full object-cover border-4 border-white shadow-lg"
               />
             ) : (
-              <div className="size-24 rounded-full bg-gradient-to-br from-primary/80 to-primary text-3xl font-bold text-white flex items-center justify-center border-4 border-white shadow-lg">
+              <div className="size-24 rounded-full bg-linear-to-br from-primary/80 to-primary text-3xl font-bold text-white flex items-center justify-center border-4 border-white shadow-lg">
                 {initials}
               </div>
             )}

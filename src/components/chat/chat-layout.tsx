@@ -8,10 +8,11 @@ import { Button } from '@/components/ui/button'
 interface ChatLayoutProps {
   sidebar: React.ReactNode
   children: React.ReactNode
+  rightSidebar?: React.ReactNode
   actionBar?: React.ReactNode
 }
 
-export function ChatLayout({ sidebar, children, actionBar }: ChatLayoutProps) {
+export function ChatLayout({ sidebar, children, rightSidebar, actionBar }: ChatLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
 
   return (
@@ -20,16 +21,16 @@ export function ChatLayout({ sidebar, children, actionBar }: ChatLayoutProps) {
       <Button
         variant="ghost"
         size="icon-sm"
-        className="fixed left-4 top-[4.25rem] z-50 md:hidden text-gray-600 hover:text-gray-900 hover:bg-gray-200"
+        className="fixed left-4 top-17 z-50 md:hidden text-gray-600 hover:text-gray-900 hover:bg-gray-200"
         onClick={() => setSidebarOpen(!sidebarOpen)}
       >
         {sidebarOpen ? <X className="size-5" /> : <Menu className="size-5" />}
       </Button>
 
-      {/* Sidebar */}
+      {/* Left Sidebar */}
       <aside
         className={cn(
-          'fixed inset-y-[3.5rem] left-0 z-40 w-[280px] flex-shrink-0 transform transition-transform duration-200 ease-in-out md:relative md:inset-y-0 md:translate-x-0',
+          'fixed inset-y-14 left-0 z-40 w-[280px] shrink-0 transform transition-transform duration-200 ease-in-out md:relative md:inset-y-0 md:translate-x-0',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full',
           'bg-white border-r border-gray-200'
         )}
@@ -52,11 +53,18 @@ export function ChatLayout({ sidebar, children, actionBar }: ChatLayoutProps) {
 
         {/* Action bar */}
         {actionBar && (
-          <div className="border-t border-gray-200 bg-white px-4 py-3">
+          <div className="border-t border-gray-200 bg-white px-4 py-3 shrink-0">
             {actionBar}
           </div>
         )}
       </div>
+
+      {/* Right Sidebar (Analysis Results) */}
+      {rightSidebar && (
+        <aside className="hidden lg:flex w-[400px] shrink-0 flex-col border-l border-gray-200 bg-white overflow-y-auto">
+          {rightSidebar}
+        </aside>
+      )}
     </div>
   )
 }

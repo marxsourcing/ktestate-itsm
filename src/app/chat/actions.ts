@@ -48,7 +48,7 @@ export async function deleteConversation(conversationId: string) {
 
   const { error } = await supabase
     .from('conversations')
-    .delete()
+    .update({ deleted_at: new Date().toISOString() })
     .eq('id', conversationId)
     .eq('user_id', user.id)
 
@@ -307,11 +307,54 @@ export async function confirmRequirement(
     }
   }
 
+  // 4. 자동 담당자 배정 로직
+  let managerId = null
+
+  // 1순위: 모듈 담당자 확인 (Primary -> Secondary)
+  if (moduleId) {
+    const { data: moduleData } = await supabase
+      .from('system_modules')
+      .select('primary_manager_id, secondary_manager_id')
+      .eq('id', moduleId)
+      .single()
+    
+    if (moduleData?.primary_manager_id) {
+      managerId = moduleData.primary_manager_id
+    } else if (moduleData?.secondary_manager_id) {
+      managerId = moduleData.secondary_manager_id
+    }
+  }
+
+  // 2순위: 시스템 담당자 확인 (모듈 담당자가 없을 때)
+  if (!managerId && systemId) {
+    const { data: systemData } = await supabase
+      .from('systems')
+      .select('manager_id')
+      .eq('id', systemId)
+      .single()
+    
+    if (systemData?.manager_id) {
+      managerId = systemData.manager_id
+    }
+  }
+
+  // 3순위: 기본 담당자 배정 (모든 전담 담당자가 없을 때)
+  if (!managerId) {
+    const { data: defaultManager } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('role', 'manager')
+      .limit(1)
+      .maybeSingle()
+    managerId = defaultManager?.id || null
+  }
+
   // 서비스 요청 생성
   const { data: request, error: reqError } = await supabase
     .from('service_requests')
     .insert({
       requester_id: user.id,
+      manager_id: managerId, // 자동 배정된 담당자
       title: requirementData.title,
       description: requirementData.description,
       system_id: systemId,
@@ -342,6 +385,12 @@ export async function confirmRequirement(
   if (convError) {
     return { error: convError.message }
   }
+
+  // 해당 대화에 연결된 첨부파일들을 새 요청(request_id)에도 연결
+  await supabase
+    .from('attachments')
+    .update({ request_id: request.id })
+    .eq('conversation_id', conversationId)
 
   revalidatePath('/chat')
   revalidatePath('/requests')

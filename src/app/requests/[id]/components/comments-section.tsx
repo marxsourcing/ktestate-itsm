@@ -5,9 +5,17 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { addComment } from '@/app/requests/actions'
-import { MessageSquare, Lock, Send } from 'lucide-react'
+import { MessageSquare, Lock, Send, File, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import ReactMarkdown from 'react-markdown'
+
+interface Attachment {
+  id: string
+  file_name: string
+  file_type: string
+  file_size: number
+  url?: string
+}
 
 interface Comment {
   id: string
@@ -19,6 +27,7 @@ interface Comment {
     email: string
     role: string
   }
+  attachments?: Attachment[]
 }
 
 interface CommentsSectionProps {
@@ -79,6 +88,25 @@ export function CommentsSection({ requestId, comments, isManager }: CommentsSect
               <div className="text-sm prose prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5">
                 <ReactMarkdown>{comment.content}</ReactMarkdown>
               </div>
+
+              {/* 첨부파일 표시 */}
+              {comment.attachments && comment.attachments.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {comment.attachments.map((att) => (
+                    <a
+                      key={att.id}
+                      href={att.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-md text-xs text-gray-600 transition-colors group"
+                    >
+                      <File className="size-3.5 text-gray-400 group-hover:text-indigo-500" />
+                      <span className="max-w-[150px] truncate">{att.file_name}</span>
+                      <ExternalLink className="size-3 text-gray-300 group-hover:text-gray-500" />
+                    </a>
+                  ))}
+                </div>
+              )}
             </li>
           ))}
         </ul>

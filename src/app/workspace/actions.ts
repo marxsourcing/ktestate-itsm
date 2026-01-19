@@ -23,8 +23,26 @@ export async function assignRequest(requestId: string, managerId: string) {
     return { error: '요청을 찾을 수 없습니다.' }
   }
 
-  // 이미 배정된 경우 확인
-  if (request.manager_id && request.manager_id !== managerId) {
+  // 권한 확인: 관리자이거나 현재 담당자여야 함 (이미 배정된 경우)
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (profileError) {
+    console.error('프로필 조회 오류:', profileError)
+    return { error: '권한 확인 중 오류가 발생했습니다.' }
+  }
+
+  const isAdmin = profile?.role === 'admin'
+  const isCurrentManager = request.manager_id === user.id
+
+  // 이미 다른 사람에게 배정된 경우 (절취 방지)
+  // 단, 관리자이거나 현재 담당자가 이관하는 경우는 허용
+  if (request.manager_id && request.manager_id !== managerId && !isAdmin && !isCurrentManager) {
+    // 디버깅을 위해 로그 남김
+    console.warn(`배정 거부: 요청(${requestId})의 현재 담당자(${request.manager_id})가 호출자(${user.id})와 다르고 호출자가 관리자도 아님.`)
     return { error: '이미 다른 담당자에게 배정된 요청입니다.' }
   }
 
@@ -41,14 +59,15 @@ export async function assignRequest(requestId: string, managerId: string) {
     return { error: `배정 오류: ${JSON.stringify(error)}` }
   }
 
-  // 히스토리 기록
+  // 배정/이관 히스토리 기록
+  const isTransfer = request.manager_id && request.manager_id !== managerId
   await supabase.from('sr_history').insert({
     request_id: requestId,
     actor_id: user.id,
-    action: 'assigned',
+    action: isTransfer ? 'transferred' : 'assigned',
     previous_status: request.status,
     new_status: request.status,
-    note: '담당자 배정됨',
+    note: isTransfer ? '담당자 이관됨' : '담당자 배정됨',
   })
 
   revalidatePath('/workspace')
@@ -146,7 +165,7 @@ export async function updateRequestStatusWithReason(
   newStatus: 'completed' | 'rejected',
   reason: string,
   effort?: EffortData
-) {
+): Promise<{ success?: boolean; error?: string; commentId?: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -218,21 +237,24 @@ export async function updateRequestStatusWithReason(
   })
 
   // 댓글 자동 등록 (요청자에게 공개)
+  let commentId: string | undefined
   if (reason.trim()) {
     const commentContent = newStatus === 'completed'
       ? `✅ **처리 완료**\n\n${reason}`
       : `❌ **요청 반려**\n\n${reason}`
 
-    const { error: commentError } = await supabase.from('sr_comments').insert({
+    const { data: commentData, error: commentError } = await supabase.from('sr_comments').insert({
       request_id: requestId,
       author_id: user.id,
       content: commentContent,
       is_internal: false, // 요청자에게 공개
-    })
+    }).select('id').single()
 
     if (commentError) {
       console.error('댓글 등록 오류:', commentError)
       // 댓글 등록 실패해도 상태 변경은 성공으로 처리
+    } else {
+      commentId = commentData.id
     }
   }
 
@@ -240,7 +262,7 @@ export async function updateRequestStatusWithReason(
   revalidatePath('/requests')
   revalidatePath(`/requests/${requestId}`)
 
-  return { success: true }
+  return { success: true, commentId }
 }
 
 // 배포 정보와 함께 상태 변경

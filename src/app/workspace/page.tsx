@@ -77,62 +77,10 @@ export default async function WorkspacePage() {
     .eq('status', 'deploy_requested')
     .order('created_at', { ascending: true })
 
-  // 배정 대기중인 요청 (manager_id가 null인 것)
-  const { data: unassignedRequests } = await supabase
-    .from('service_requests')
-    .select(`
-      *,
-      system:systems(id, name),
-      module:system_modules(id, name),
-      requester:profiles!service_requests_requester_id_fkey(full_name, email),
-      category_lv1:request_categories_lv1(id, name),
-      category_lv2:request_categories_lv2(id, name)
-    `)
-    .is('manager_id', null)
-    .in('status', ['requested', 'reviewing'])
-    .order('priority', { ascending: false })
-    .order('created_at', { ascending: true })
-
-  // 최근 완료된 요청 (7일 이내)
-  const sevenDaysAgo = new Date()
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-  
-  const { data: recentCompletedRequests } = await supabase
-    .from('service_requests')
-    .select(`
-      *,
-      system:systems(id, name),
-      module:system_modules(id, name),
-      requester:profiles!service_requests_requester_id_fkey(full_name, email),
-      category_lv1:request_categories_lv1(id, name),
-      category_lv2:request_categories_lv2(id, name)
-    `)
-    .eq('manager_id', user.id)
-    .eq('status', 'completed')
-    .gte('completed_at', sevenDaysAgo.toISOString())
-    .order('completed_at', { ascending: false })
-    .limit(10)
-
-  // 통계 계산
-  const stats = {
-    myTotal: myRequests?.length || 0,
-    urgent: myRequests?.filter(r => r.priority === 'urgent').length || 0,
-    high: myRequests?.filter(r => r.priority === 'high').length || 0,
-    unassigned: unassignedRequests?.length || 0,
-    recentCompleted: recentCompletedRequests?.length || 0,
-    testAssigned: testAssignedRequests?.length || 0,
-    deployAssigned: deployAssignedRequests?.length || 0,
-  }
-
   return (
-    <WorkspaceLayout
-      stats={stats}
-      managerName={profile?.full_name || user.email?.split('@')[0] || '담당자'}
-    >
+    <WorkspaceLayout>
       <RequestList
         myRequests={(myRequests as AssignedRequest[]) || []}
-        unassignedRequests={(unassignedRequests as AssignedRequest[]) || []}
-        recentCompletedRequests={(recentCompletedRequests as AssignedRequest[]) || []}
         testAssignedRequests={(testAssignedRequests as AssignedRequest[]) || []}
         deployAssignedRequests={(deployAssignedRequests as AssignedRequest[]) || []}
         currentUserId={user.id}
@@ -140,4 +88,3 @@ export default async function WorkspacePage() {
     </WorkspaceLayout>
   )
 }
-

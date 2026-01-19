@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
-import { AlertTriangle, CheckCircle2, Loader2, Calculator } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Loader2, Calculator, Upload, X, File } from 'lucide-react'
 
 export interface EffortData {
   estimated_fp?: number | null
@@ -26,7 +26,7 @@ interface StatusChangeModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   type: 'completed' | 'rejected'
-  onConfirm: (reason: string, effort?: EffortData) => Promise<void>
+  onConfirm: (reason: string, effort?: EffortData, files?: File[]) => Promise<void>
   isLoading?: boolean
   currentEffort?: EffortData
 }
@@ -34,7 +34,7 @@ interface StatusChangeModalProps {
 const CONFIG = {
   completed: {
     title: '처리 완료',
-    description: '요청 처리가 완료되었습니다. 처리 결과를 입력해주세요.',
+    description: '요청 처리가 완료되었습니다. 처리 결과와 증빙 자료를 입력해주세요.',
     placeholder: '처리 결과를 입력하세요...\n예: 기능 개발 완료 후 배포하였습니다. 해당 화면에서 확인 가능합니다.',
     icon: CheckCircle2,
     iconColor: 'text-emerald-600',
@@ -71,6 +71,7 @@ export function StatusChangeModal({
   const [actualFp, setActualFp] = useState('')
   const [estimatedMd, setEstimatedMd] = useState('')
   const [actualMd, setActualMd] = useState('')
+  const [files, setFiles] = useState<File[]>([])
 
   const config = CONFIG[type]
   const Icon = config.icon
@@ -78,10 +79,14 @@ export function StatusChangeModal({
   // 모달 열릴 때 기존 값 로드
   useEffect(() => {
     if (open && currentEffort) {
-      setEstimatedFp(currentEffort.estimated_fp?.toString() || '')
-      setActualFp(currentEffort.actual_fp?.toString() || '')
-      setEstimatedMd(currentEffort.estimated_md?.toString() || '')
-      setActualMd(currentEffort.actual_md?.toString() || '')
+      // Avoid synchronous setState warning in some environments
+      const initForm = () => {
+        setEstimatedFp(currentEffort.estimated_fp?.toString() || '')
+        setActualFp(currentEffort.actual_fp?.toString() || '')
+        setEstimatedMd(currentEffort.estimated_md?.toString() || '')
+        setActualMd(currentEffort.actual_md?.toString() || '')
+      }
+      queueMicrotask(initForm)
     }
   }, [open, currentEffort])
 
@@ -98,7 +103,7 @@ export function StatusChangeModal({
       actual_md: actualMd ? parseFloat(actualMd) : null,
     } : undefined
 
-    await onConfirm(reason.trim(), effortData)
+    await onConfirm(reason.trim(), effortData, files)
     resetForm()
   }
 
@@ -108,6 +113,17 @@ export function StatusChangeModal({
     setActualFp('')
     setEstimatedMd('')
     setActualMd('')
+    setFiles([])
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      setFiles(prev => [...prev, ...Array.from(e.target.files!)])
+    }
+  }
+
+  const removeFile = (index: number) => {
+    setFiles(prev => prev.filter((_, i) => i !== index))
   }
 
   const handleOpenChange = (newOpen: boolean) => {
@@ -121,7 +137,7 @@ export function StatusChangeModal({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Icon className={`size-5 ${config.iconColor}`} />
@@ -227,9 +243,60 @@ export function StatusChangeModal({
               placeholder={config.placeholder}
               rows={4}
               disabled={isLoading}
-              className="resize-none"
+              className="resize-none text-sm"
             />
-            <p className="text-xs text-gray-500">{config.hint}</p>
+            <p className="text-[11px] text-gray-500">{config.hint}</p>
+          </div>
+
+          {/* 첨부파일 영역 */}
+          <div className="space-y-2">
+            <Label>첨부파일</Label>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => document.getElementById('file-upload')?.click()}
+                  disabled={isLoading}
+                  className="h-8 gap-2 border-dashed border-gray-300"
+                >
+                  <Upload className="size-3.5" />
+                  파일 선택
+                </Button>
+                <input
+                  id="file-upload"
+                  type="file"
+                  multiple
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+                <span className="text-[11px] text-gray-400">
+                  처리 결과에 대한 증빙 서류나 참고 파일을 첨부할 수 있습니다.
+                </span>
+              </div>
+
+              {files.length > 0 && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {files.map((file, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center gap-2 px-2 py-1 bg-gray-100 rounded text-xs text-gray-600 border border-gray-200"
+                    >
+                      <File className="size-3" />
+                      <span className="max-w-[150px] truncate">{file.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeFile(index)}
+                        className="text-gray-400 hover:text-gray-600"
+                      >
+                        <X className="size-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
