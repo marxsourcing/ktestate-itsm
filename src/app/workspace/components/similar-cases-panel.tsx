@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
@@ -67,15 +67,7 @@ export function SimilarCasesPanel({
   const [expandedCaseId, setExpandedCaseId] = useState<string | null>(null)
   const [loadingComments, setLoadingComments] = useState<string | null>(null)
 
-  // 요청 변경 시 검색 상태 초기화
-  useEffect(() => {
-    setSimilarCases([])
-    setIsSearched(false)
-    setExpandedCaseId(null)
-    setLoadingComments(null)
-  }, [requestId])
-
-  const searchSimilarCases = async () => {
+  const searchSimilarCases = useCallback(async () => {
     setIsLoading(true)
     setIsSearched(true)
 
@@ -104,7 +96,19 @@ export function SimilarCasesPanel({
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [requestId, requestTitle, requestDescription, systemName])
+
+  // 요청 변경 시 검색 상태 초기화 및 자동 검색
+  useEffect(() => {
+    setSimilarCases([])
+    setIsSearched(false)
+    setExpandedCaseId(null)
+    setLoadingComments(null)
+
+    if (requestId && requestTitle) {
+      searchSimilarCases()
+    }
+  }, [requestId, requestTitle, searchSimilarCases])
 
   // 댓글(답변) 로드
   const loadComments = async (caseId: string) => {
@@ -157,7 +161,7 @@ export function SimilarCasesPanel({
   return (
     <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-br from-indigo-50 to-purple-50 border-b">
+      <div className="flex items-center justify-between px-4 py-3 bg-linear-to-br from-indigo-50 to-purple-50 border-b">
         <div className="flex items-center gap-2">
           <FileSearch className="size-4 text-indigo-600" />
           <h3 className="text-sm font-semibold text-gray-900">유사 사례 검색</h3>

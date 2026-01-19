@@ -425,18 +425,16 @@ export function WorkspaceRequestDetail({
                 {priorityConfig.label}
               </Badge>
             </div>
-            {/* AI Assistant Button (Detail-only mode) */}
-            {viewMode === 'detail-only' && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setIsAiChatOpen(true)}
-                className="h-8 gap-1.5 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
-              >
-                <Sparkles className="size-4" />
-                AI 어시스턴트
-              </Button>
-            )}
+            {/* AI Assistant Button */}
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setIsAiChatOpen(true)}
+              className="h-8 gap-1.5 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+            >
+              <Sparkles className="size-4" />
+              AI 어시스턴트
+            </Button>
           </div>
           <h2 className="text-lg font-bold text-gray-900 mb-2 line-clamp-2">
             {request.title}
@@ -927,57 +925,38 @@ export function WorkspaceRequestDetail({
         </div>
       </div>
 
-      {/* AI Chat Panel (Full mode or Popup) */}
-      {viewMode === 'full' ? (
-        <div className="flex-1 overflow-hidden">
-          <ManagerAiChat
-            requestId={request.id}
-            requestContext={{
-              title: request.title,
-              description: request.description,
-              priority: request.priority,
-              requesterName: request.requester?.full_name || request.requester?.email,
-              systemName: request.system?.name,
-              moduleName: request.module?.name,
-              category_lv1_name: request.category_lv1?.name,
-              category_lv2_name: request.category_lv2?.name
-            }}
-          />
-        </div>
-      ) : (
-        /* AI Assistant Popup */
-        isAiChatOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[80vh] flex flex-col overflow-hidden border border-gray-200">
-              <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-white shrink-0">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
-                    <Sparkles className="size-4 text-white" />
-                  </div>
-                  <h3 className="font-bold text-gray-900">AI 어시스턴트</h3>
+      {/* AI Assistant Popup */}
+      {isAiChatOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[80vh] flex flex-col overflow-hidden border border-gray-200">
+            <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-white shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
+                  <Sparkles className="size-4 text-white" />
                 </div>
-                <Button variant="ghost" size="icon" onClick={() => setIsAiChatOpen(false)}>
-                  <X className="size-5" />
-                </Button>
+                <h3 className="font-bold text-gray-900">AI 어시스턴트</h3>
               </div>
-              <div className="flex-1 overflow-hidden">
-                <ManagerAiChat
-                  requestId={request.id}
-                  requestContext={{
-                    title: request.title,
-                    description: request.description,
-                    priority: request.priority,
-                    requesterName: request.requester?.full_name || request.requester?.email,
-                    systemName: request.system?.name,
-                    moduleName: request.module?.name,
-                    category_lv1_name: request.category_lv1?.name,
-                    category_lv2_name: request.category_lv2?.name
-                  }}
-                />
-              </div>
+              <Button variant="ghost" size="icon" onClick={() => setIsAiChatOpen(false)}>
+                <X className="size-5" />
+              </Button>
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <ManagerAiChat
+                requestId={request.id}
+                requestContext={{
+                  title: request.title,
+                  description: request.description,
+                  priority: request.priority,
+                  requesterName: request.requester?.full_name || request.requester?.email,
+                  systemName: request.system?.name,
+                  moduleName: request.module?.name,
+                  category_lv1_name: request.category_lv1?.name,
+                  category_lv2_name: request.category_lv2?.name
+                }}
+              />
             </div>
           </div>
-        )
+        </div>
       )}
 
       {/* 원본 채팅 조회 모달 */}
