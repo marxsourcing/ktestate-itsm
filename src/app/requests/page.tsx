@@ -34,7 +34,8 @@ export default async function RequestsPage() {
       requester:profiles!service_requests_requester_id_fkey(full_name, email),
       manager:profiles!service_requests_manager_id_fkey(full_name, email),
       category_lv1:request_categories_lv1(id, name),
-      category_lv2:request_categories_lv2(id, name)
+      category_lv2:request_categories_lv2(id, name),
+      comments:sr_comments(count)
     `)
     .order('created_at', { ascending: false })
 

@@ -97,6 +97,11 @@ export function RequestCard({
     queueMicrotask(() => setTimeAgo(time))
   }, [request.created_at])
 
+  // 댓글 수 추출
+  const commentCount = Array.isArray(request.comments) 
+    ? request.comments[0]?.count || 0 
+    : (request.comments as any)?.count || 0
+
   // 링크 대상 (채팅 드래프트는 채팅방으로, 일반 요청은 상세 페이지로)
   const href = request.is_chat_draft ? `/chat/${request.id}` : `/requests/${request.id}`
 
@@ -128,6 +133,12 @@ export function RequestCard({
             <Badge variant="outline" className="text-[10px] h-5 bg-gray-100 text-gray-600 border-gray-200">
               <MessageSquare className="size-2.5 mr-1" />
               채팅 중
+            </Badge>
+          )}
+          {commentCount > 0 && (
+            <Badge variant="secondary" className="text-[10px] h-5 bg-indigo-50 text-indigo-600 border-indigo-100 font-normal">
+              <MessageSquare className="size-2.5 mr-1" />
+              {commentCount}
             </Badge>
           )}
         </div>

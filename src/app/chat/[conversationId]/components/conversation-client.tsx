@@ -67,7 +67,7 @@ export function ConversationClient({ conversation, initialMessages }: Conversati
           <div className="p-4 border-b border-gray-200 bg-gray-50 shrink-0">
             <h3 className="font-bold text-gray-900 flex items-center gap-2">
               <div className="w-1 h-4 bg-rose-500 rounded-full" />
-              요구사항 분석 결과
+              요청/문의사항 분석 결과
             </h3>
           </div>
           <div className="flex-1 overflow-y-auto p-4">
@@ -76,6 +76,7 @@ export function ConversationClient({ conversation, initialMessages }: Conversati
               conversationId={conversation.id}
               onUpdate={handleRequirementUpdate}
               readOnly={conversation.status === 'confirmed'}
+              excludeRequestId={conversation.request_id || undefined}
             />
           </div>
         </div>

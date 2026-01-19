@@ -23,8 +23,26 @@ export async function assignRequest(requestId: string, managerId: string) {
     return { error: '요청을 찾을 수 없습니다.' }
   }
 
-  // 이미 배정된 경우 확인
-  if (request.manager_id && request.manager_id !== managerId) {
+  // 권한 확인: 관리자이거나 현재 담당자여야 함 (이미 배정된 경우)
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (profileError) {
+    console.error('프로필 조회 오류:', profileError)
+    return { error: '권한 확인 중 오류가 발생했습니다.' }
+  }
+
+  const isAdmin = profile?.role === 'admin'
+  const isCurrentManager = request.manager_id === user.id
+
+  // 이미 다른 사람에게 배정된 경우 (절취 방지)
+  // 단, 관리자이거나 현재 담당자가 이관하는 경우는 허용
+  if (request.manager_id && request.manager_id !== managerId && !isAdmin && !isCurrentManager) {
+    // 디버깅을 위해 로그 남김
+    console.warn(`배정 거부: 요청(${requestId})의 현재 담당자(${request.manager_id})가 호출자(${user.id})와 다르고 호출자가 관리자도 아님.`)
     return { error: '이미 다른 담당자에게 배정된 요청입니다.' }
   }
 

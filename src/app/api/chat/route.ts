@@ -20,8 +20,11 @@ const BASE_SYSTEM_PROMPT = `당신은 KT Estate의 IT 서비스 요구사항 접
 
 **유사 사례 참고 및 RAG 규칙:**
 1. 하단에 제공되는 [유사 사례 검색 결과]가 있다면 이를 참고하여 답변하세요.
-2. 만약 유사한 사례가 있다면 "이전에도 비슷한 요청이 있었으며, 당시에는 ~하게 처리되었습니다"와 같이 자연스럽게 언급하여 신뢰도를 높이세요.
-3. 중복된 요청이 이미 처리 중인 것 같으면 사용자에게 안내하세요.
+2. 만약 유사도가 80% 이상인 매우 유사한 사례가 있다면, 해당 사례의 '해결방법'을 바탕으로 사용자에게 즉시 해결책을 제시하세요.
+   예: "매우 유사한 사례가 발견되었습니다. 보통 이 문제는 ~하게 해결되었습니다. 혹시 이 방법으로 해결이 가능한지 확인 부탁드립니다."
+3. 만약 유사한 사례가 30%~80% 사이라면 "이전에도 비슷한 요청이 있었으며, 당시에는 ~하게 처리되었습니다"와 같이 자연스럽게 언급하여 참고 정보를 제공하세요.
+4. 해결책을 제시하더라도, 사용자의 개별적인 상황이 다를 수 있으므로 '요청/문의사항 분석'은 계속 진행하여 정보를 추출하세요.
+5. 중복된 요청이 이미 처리 중인 것 같으면 사용자에게 안내하세요.
 
 **대화 유도 및 확정 규칙:**
 1. 추출할 필수 정보(시스템, 제목, 내용 등)가 80% 이상 수집되었다고 판단되면, 답변 끝에 "내용이 충분히 정리되었습니다. 우측의 '요구사항 확정' 버튼을 눌러 접수를 완료하시겠습니까?"라는 문구를 포함하여 진행을 유도하세요.
@@ -63,7 +66,7 @@ async function getSimilarCases(supabase: SupabaseClient, message: string) {
 
   const { data: requests } = await supabase
     .from('service_requests')
-    .select('title, description, status, systems:system_id(name)')
+    .select('id, title, description, status, systems:system_id(name)')
     .limit(50)
 
   const similar = (requests || [])
@@ -77,7 +80,20 @@ async function getSimilarCases(supabase: SupabaseClient, message: string) {
 
   if (similar.length === 0) return '없음'
 
-  return similar.map(s => `- 제목: ${s.title}\n  시스템: ${(s.systems as any)?.name}\n  상태: ${s.status}\n  내용: ${s.description?.slice(0, 100)}...`).join('\n\n')
+  // 각 유사 사례에 대해 최신 댓글(해결 방법) 조회
+  const casesWithResolution = await Promise.all(similar.map(async s => {
+    const { data: comments } = await supabase
+      .from('sr_comments')
+      .select('content')
+      .eq('request_id', s.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+    
+    const resolution = comments?.[0]?.content || '해결 방법 정보 없음'
+    return `- 제목: ${s.title} (${Math.round(s.similarity)}% 유사)\n  시스템: ${(s.systems as any)?.name}\n  상태: ${s.status}\n  내용: ${s.description?.slice(0, 100)}...\n  해결방법: ${resolution}`
+  }))
+
+  return casesWithResolution.join('\n\n')
 }
 
 async function getSystemModuleList(supabase: SupabaseClient) {

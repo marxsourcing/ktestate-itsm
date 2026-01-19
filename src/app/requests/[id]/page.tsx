@@ -9,6 +9,7 @@ import {
   User,
   Clock,
   MessageCircle,
+  MessageSquare,
 } from 'lucide-react'
 import { HistoryTimeline } from './components/history-timeline'
 import { CommentsSection } from './components/comments-section'
@@ -62,6 +63,15 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
 
   if (!request) notFound()
 
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  const isManager = profile?.role === 'manager' || profile?.role === 'admin'
+  const isRequester = user.id === request.requester_id
+
   // 히스토리 조회
   const { data: history } = await supabase
     .from('sr_history')
@@ -73,7 +83,7 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
     .order('created_at', { ascending: false })
 
   // 댓글 조회
-  const { data: commentsRaw } = await supabase
+  let commentsQuery = supabase
     .from('sr_comments')
     .select(`
       *,
@@ -82,6 +92,13 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
     `)
     .eq('request_id', id)
     .order('created_at', { ascending: true })
+
+  // 요청자는 내부 메모를 볼 수 없음
+  if (!isManager) {
+    commentsQuery = commentsQuery.eq('is_internal', false)
+  }
+
+  const { data: commentsRaw } = await commentsQuery
 
   // 댓글 첨부파일 Signed URL 생성
   const comments = await Promise.all((commentsRaw || []).map(async (comment) => {
@@ -97,8 +114,6 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
     return comment
   }))
 
-  // 댓글 조회 (생략)
-
   // 대화 및 해당 대화의 첨부파일 조회
   const { data: conversation } = await supabase
     .from('conversations')
@@ -107,7 +122,7 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
     .maybeSingle()
 
   let conversationAttachments: AttachmentData[] = []
-  
+
   // 1. 요청 ID(request_id)로 직접 연결된 첨부파일 조회 (확정 시 업데이트된 파일들)
   const { data: directAttachments } = await supabase
     .from('attachments')
@@ -139,14 +154,12 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
     }))
   }
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
+  // 대화 잠금 조건: 'accepted' (접수) 이후 단계이거나 반려/완료된 경우
+  const isLocked = !['draft', 'draft_chat', 'requested', 'approved', 'consulting'].includes(request.status)
+  const chatReadOnly = !isRequester || isLocked
 
-  const isManager = profile?.role === 'manager' || profile?.role === 'admin'
-  const isRequester = user.id === request.requester_id
+  // 채팅 섹션 표시 여부: 요청자 본인이거나 관리자/담당자인 경우에만 표시
+  const showChat = isRequester || isManager
 
   const statusConfig = STATUS_CONFIG[request.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.requested
   const priorityConfig = PRIORITY_CONFIG[request.priority as keyof typeof PRIORITY_CONFIG] || PRIORITY_CONFIG.medium
@@ -271,16 +284,30 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
         </div>
 
         {/* Column 2: AI Chat (Middle) - Main focal point */}
-        <div className="flex-1 min-w-[400px] flex flex-col overflow-hidden lg:border-r border-gray-200 bg-white">
-          <RequestChatArea 
-            requestId={request.id}
-            conversationId={conversation?.id}
-            initialMessages={conversation?.messages || []}
-            requestTitle={request.title}
-            requestDescription={request.description}
-            readOnly={!isRequester}
-          />
-        </div>
+        {showChat ? (
+          <div className="flex-1 min-w-[400px] flex flex-col overflow-hidden lg:border-r border-gray-200 bg-white">
+            <RequestChatArea 
+              requestId={request.id}
+              conversationId={conversation?.id}
+              initialMessages={conversation?.messages || []}
+              requestTitle={request.title}
+              requestDescription={request.description}
+              readOnly={chatReadOnly}
+              isLocked={isLocked}
+            />
+          </div>
+        ) : (
+          /* 채팅이 숨겨진 경우 (유사 요청 조회 등) 상세 정보를 더 넓게 표시 */
+          <div className="flex-1 flex flex-col bg-gray-50 p-8 items-center justify-center text-center">
+            <div className="max-w-md">
+              <MessageSquare className="size-12 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">대화 내용 비공개</h3>
+              <p className="text-sm text-gray-500">
+                개인정보 보호를 위해 요청자와 AI 사이의 상세 대화 내용은 요청 당사자와 담당자만 확인할 수 있습니다.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Column 3: Analysis Results (Right) - Keep visible as much as possible */}
         <div className="hidden lg:flex w-[320px] xl:w-[380px] shrink-0 bg-white flex-col overflow-hidden">

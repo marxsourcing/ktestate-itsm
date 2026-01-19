@@ -15,6 +15,7 @@ interface RequestChatAreaProps {
   requestTitle: string
   requestDescription: string
   readOnly?: boolean
+  isLocked?: boolean
 }
 
 // AI 활용 제안 옵션
@@ -51,7 +52,8 @@ export function RequestChatArea({
   initialMessages, 
   requestTitle,
   requestDescription,
-  readOnly = false
+  readOnly = false,
+  isLocked = false
 }: RequestChatAreaProps) {
   const [conversationId, setConversationId] = useState<string | undefined>(initialConversationId)
   const [messages, setMessages] = useState<Message[]>(initialMessages)
@@ -181,7 +183,7 @@ export function RequestChatArea({
           {readOnly && (
             <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-gray-100 text-gray-500 text-[11px] font-medium">
               <Lock className="size-3" />
-              읽기 전용
+              {isLocked ? '대화 종료 (진행 중)' : '읽기 전용'}
             </div>
           )}
         </div>
@@ -200,9 +202,11 @@ export function RequestChatArea({
                 {readOnly ? 'AI와의 대화 내역' : '이 요청에 대해 도움이 필요하신가요?'}
               </h2>
               <p className="text-gray-500 text-sm">
-                {readOnly 
-                  ? '요청자가 AI와 나눈 대화 내용을 확인할 수 있습니다.' 
-                  : 'AI 어시스턴트가 요청 처리를 도와드립니다. 아래 옵션을 선택하거나 직접 질문해보세요.'}
+                {isLocked
+                  ? '요청이 진행 중(접수 이후)이므로 추가 대화가 제한됩니다.'
+                  : readOnly 
+                    ? '요청자가 AI와 나눈 대화 내용을 확인할 수 있습니다.' 
+                    : 'AI 어시스턴트가 요청 처리를 도와드립니다. 아래 옵션을 선택하거나 직접 질문해보세요.'}
               </p>
             </div>
 
@@ -259,7 +263,13 @@ export function RequestChatArea({
         onSend={sendMessage}
         disabled={readOnly || isLoading}
         isLoading={isLoading}
-        placeholder={readOnly ? "요청자만 AI와 대화할 수 있습니다." : "AI에게 질문하거나 도움을 요청하세요..."}
+        placeholder={
+          isLocked 
+            ? "요청이 진행 중이어서 대화할 수 없습니다." 
+            : readOnly 
+              ? "요청자만 AI와 대화할 수 있습니다." 
+              : "AI에게 질문하거나 도움을 요청하세요..."
+        }
       />
     </div>
   )
