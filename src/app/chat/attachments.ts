@@ -15,7 +15,8 @@ export interface AttachmentData {
 export async function uploadAttachment(
   formData: FormData,
   messageId?: string,
-  requestId?: string
+  requestId?: string,
+  commentId?: string
 ): Promise<{ attachment?: AttachmentData; error?: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -78,6 +79,7 @@ export async function uploadAttachment(
     .insert({
       message_id: messageId || null,
       request_id: requestId || null,
+      comment_id: commentId || null,
       file_name: file.name,
       file_size: file.size,
       file_type: file.type,
@@ -146,7 +148,7 @@ export async function deleteAttachment(attachmentId: string): Promise<{ success?
   }
 
   // Storage에서 파일 삭제
-  const { error: storageError } = await supabase.storage
+  await supabase.storage
     .from('attachments')
     .remove([attachment.storage_path])
 

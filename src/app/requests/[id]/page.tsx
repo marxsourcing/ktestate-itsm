@@ -74,14 +74,29 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
     .order('created_at', { ascending: false })
 
   // 댓글 조회
-  const { data: comments } = await supabase
+  const { data: commentsRaw } = await supabase
     .from('sr_comments')
     .select(`
       *,
-      author:profiles!sr_comments_author_id_fkey(full_name, email, role)
+      author:profiles!sr_comments_author_id_fkey(full_name, email, role),
+      attachments(*)
     `)
     .eq('request_id', id)
     .order('created_at', { ascending: true })
+
+  // 댓글 첨부파일 Signed URL 생성
+  const comments = await Promise.all((commentsRaw || []).map(async (comment) => {
+    if (comment.attachments && comment.attachments.length > 0) {
+      const attachmentsWithUrls = await Promise.all(comment.attachments.map(async (att: { storage_path: string } & Record<string, unknown>) => {
+        const { data } = await supabase.storage
+          .from('attachments')
+          .createSignedUrl(att.storage_path, 3600)
+        return { ...att, url: data?.signedUrl }
+      }))
+      return { ...comment, attachments: attachmentsWithUrls }
+    }
+    return comment
+  }))
 
   // 연결된 대화 조회 (있다면)
   const { data: conversation } = await supabase
@@ -108,7 +123,7 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-gray-50">
       {/* Header */}
-      <div className="flex-shrink-0 bg-white border-b border-gray-200 px-6 py-4">
+      <div className="shrink-0 bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="sm" asChild className="text-gray-500 hover:text-gray-700">
             <Link href="/requests">
@@ -143,7 +158,7 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left Panel - Request Details & Comments */}
-        <div className="w-[400px] flex-shrink-0 border-r border-gray-200 bg-white overflow-y-auto">
+        <div className="w-[400px] shrink-0 border-r border-gray-200 bg-white overflow-y-auto">
           {/* Request Info Card */}
           <div className="p-4 border-b border-gray-100">
             <h3 className="text-sm font-semibold text-gray-500 mb-3">요청 정보</h3>

@@ -146,7 +146,7 @@ export async function updateRequestStatusWithReason(
   newStatus: 'completed' | 'rejected',
   reason: string,
   effort?: EffortData
-) {
+): Promise<{ success?: boolean; error?: string; commentId?: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -218,21 +218,24 @@ export async function updateRequestStatusWithReason(
   })
 
   // 댓글 자동 등록 (요청자에게 공개)
+  let commentId: string | undefined
   if (reason.trim()) {
     const commentContent = newStatus === 'completed'
       ? `✅ **처리 완료**\n\n${reason}`
       : `❌ **요청 반려**\n\n${reason}`
 
-    const { error: commentError } = await supabase.from('sr_comments').insert({
+    const { data: commentData, error: commentError } = await supabase.from('sr_comments').insert({
       request_id: requestId,
       author_id: user.id,
       content: commentContent,
       is_internal: false, // 요청자에게 공개
-    })
+    }).select('id').single()
 
     if (commentError) {
       console.error('댓글 등록 오류:', commentError)
       // 댓글 등록 실패해도 상태 변경은 성공으로 처리
+    } else {
+      commentId = commentData.id
     }
   }
 
@@ -240,7 +243,7 @@ export async function updateRequestStatusWithReason(
   revalidatePath('/requests')
   revalidatePath(`/requests/${requestId}`)
 
-  return { success: true }
+  return { success: true, commentId }
 }
 
 // 배포 정보와 함께 상태 변경
