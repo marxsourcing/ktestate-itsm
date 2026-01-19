@@ -41,6 +41,7 @@ export function ConversationList() {
         .from('conversations')
         .select('*')
         .eq('user_id', user.id)
+        .is('deleted_at', null)
         .order('updated_at', { ascending: false })
 
       if (data) {

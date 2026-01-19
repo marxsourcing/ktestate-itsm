@@ -41,14 +41,15 @@ export async function assignRequest(requestId: string, managerId: string) {
     return { error: `배정 오류: ${JSON.stringify(error)}` }
   }
 
-  // 히스토리 기록
+  // 배정/이관 히스토리 기록
+  const isTransfer = request.manager_id && request.manager_id !== managerId
   await supabase.from('sr_history').insert({
     request_id: requestId,
     actor_id: user.id,
-    action: 'assigned',
+    action: isTransfer ? 'transferred' : 'assigned',
     previous_status: request.status,
     new_status: request.status,
-    note: '담당자 배정됨',
+    note: isTransfer ? '담당자 이관됨' : '담당자 배정됨',
   })
 
   revalidatePath('/workspace')

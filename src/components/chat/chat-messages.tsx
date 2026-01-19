@@ -3,24 +3,18 @@
 import { useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { Bot, User, FileText, Download, Image as ImageIcon, ExternalLink } from 'lucide-react'
-import { RequirementCard } from './requirement-card'
+import { RequirementCard, RequirementData } from './requirement-card'
 import type { AttachmentData } from '@/app/chat/attachments'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import Image from 'next/image'
 
 export interface Message {
   id: string
   role: 'user' | 'assistant' | 'system'
   content: string
   metadata?: {
-    requirementCard?: {
-      system?: string
-      module?: string
-      title?: string
-      description?: string
-      category_lv1?: string  // 대분류 (SR 구분)
-      category_lv2?: string  // 소분류 (SR 상세 구분)
-    }
+    requirementCard?: RequirementData
     similarRequests?: Array<{
       id: string
       title: string
@@ -31,16 +25,15 @@ export interface Message {
   created_at: string
 }
 
-export type RequirementData = NonNullable<NonNullable<Message['metadata']>['requirementCard']>
-
 interface ChatMessagesProps {
   messages: Message[]
   isLoading?: boolean
   onRequirementUpdate?: (data: RequirementData) => void
   excludeRequestId?: string  // 유사 요청 검색 시 제외할 요청 ID
+  hideCards?: boolean // 카드 숨김 옵션 추가
 }
 
-export function ChatMessages({ messages, isLoading, onRequirementUpdate, excludeRequestId }: ChatMessagesProps) {
+export function ChatMessages({ messages, isLoading, onRequirementUpdate, excludeRequestId, hideCards = false }: ChatMessagesProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -64,8 +57,8 @@ export function ChatMessages({ messages, isLoading, onRequirementUpdate, exclude
             )}
           >
             {message.role === 'assistant' && (
-              <div className="flex-shrink-0">
-                <div className="flex size-8 items-center justify-center rounded-full kt-gradient">
+              <div className="shrink-0">
+                <div className="flex size-8 items-center justify-center rounded-full bg-linear-to-br from-indigo-500 to-purple-600 shadow-sm">
                   <Bot className="size-5 text-white" />
                 </div>
               </div>
@@ -80,10 +73,10 @@ export function ChatMessages({ messages, isLoading, onRequirementUpdate, exclude
               {(message.content.trim() || (message.metadata?.attachments && message.metadata.attachments.length > 0)) && (
                 <div
                   className={cn(
-                    'rounded-2xl px-4 py-3 text-[15px] leading-relaxed',
+                    'rounded-2xl px-4 py-3 text-[15px] leading-relaxed shadow-sm',
                     message.role === 'user'
                       ? 'bg-rose-500 text-white'
-                      : 'bg-white text-gray-800 border border-gray-200 shadow-sm'
+                      : 'bg-white text-gray-800 border border-gray-200'
                   )}
                 >
                   {message.content.trim() && (
@@ -112,8 +105,8 @@ export function ChatMessages({ messages, isLoading, onRequirementUpdate, exclude
                 </div>
               )}
 
-              {/* Requirement Card */}
-              {message.metadata?.requirementCard && (
+              {/* Requirement Card (옵션에 따라 숨김 가능) */}
+              {!hideCards && message.metadata?.requirementCard && (
                 <div className="mt-4">
                   <RequirementCard
                     data={message.metadata.requirementCard}
@@ -155,7 +148,7 @@ export function ChatMessages({ messages, isLoading, onRequirementUpdate, exclude
               </span>
             </div>
             {message.role === 'user' && (
-              <div className="flex-shrink-0 order-2">
+              <div className="shrink-0 order-2">
                 <div className="flex size-8 items-center justify-center rounded-full bg-gray-200">
                   <User className="size-5 text-gray-600" />
                 </div>
@@ -167,7 +160,7 @@ export function ChatMessages({ messages, isLoading, onRequirementUpdate, exclude
         {/* Loading indicator */}
         {isLoading && (
           <div className="flex gap-4">
-            <div className="flex-shrink-0">
+            <div className="shrink-0">
               <div className="flex size-8 items-center justify-center rounded-full kt-gradient">
                 <Bot className="size-5 text-white" />
               </div>
@@ -213,13 +206,18 @@ function AttachmentPreview({
   if (isImage && attachment.url) {
     return (
       <div className="group relative">
-        <img
-          src={attachment.url}
-          alt={attachment.file_name}
-          className="max-w-[300px] max-h-[200px] rounded-lg object-cover cursor-pointer"
+        <div 
+          className="relative max-w-[300px] h-[200px] rounded-lg overflow-hidden cursor-pointer"
           onClick={() => window.open(attachment.url, '_blank')}
-          onError={() => setImageError(true)}
-        />
+        >
+          <Image
+            src={attachment.url}
+            alt={attachment.file_name}
+            fill
+            className="object-cover"
+            onError={() => setImageError(true)}
+          />
+        </div>
         <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg">
           <a
             href={attachment.url}
@@ -267,7 +265,7 @@ function AttachmentPreview({
         </p>
       </div>
       <Download className={cn(
-        'size-5 flex-shrink-0',
+        'size-5 shrink-0',
         isUserMessage ? 'text-white' : 'text-gray-400'
       )} />
     </a>

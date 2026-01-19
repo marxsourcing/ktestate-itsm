@@ -1,9 +1,6 @@
 import { redirect, notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { ChatLayout } from '@/components/chat/chat-layout'
-import { ConversationList } from '@/components/chat/conversation-list'
-import { ChatArea } from './components/chat-area'
-import { ActionBar } from './components/action-bar'
+import { ConversationClient } from './components/conversation-client'
 
 interface Props {
   params: Promise<{
@@ -40,21 +37,9 @@ export default async function ConversationPage({ params }: Props) {
     .order('created_at', { ascending: true })
 
   return (
-    <ChatLayout
-      sidebar={<ConversationList />}
-      actionBar={
-        conversation.status !== 'confirmed' && (
-          <ActionBar conversationId={conversationId} />
-        )
-      }
-    >
-      <ChatArea
-        conversationId={conversationId}
-        initialMessages={messages || []}
-        conversationStatus={conversation.status}
-        linkedRequestId={conversation.request_id}
-      />
-    </ChatLayout>
+    <ConversationClient
+      conversation={conversation}
+      initialMessages={messages || []}
+    />
   )
 }
-

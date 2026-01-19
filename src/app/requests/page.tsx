@@ -48,27 +48,27 @@ export default async function RequestsPage() {
 
   const { data: requests } = await query
 
-  // 작성중인 대화(Conversations) 조회 (요청자 전용)
+  // 작성중인 대화(Conversations) 조회 (본인이 시작한 대화 중 아직 요청으로 확정되지 않고 삭제되지 않은 건)
   let drafts: Request[] = []
-  if (!isManager) {
-    const { data: conversationDrafts } = await supabase
-      .from('conversations')
-      .select('*')
-      .eq('user_id', user.id)
-      .is('request_id', null) // 아직 요청으로 확정되지 않은 대화
-      .order('created_at', { ascending: false })
-    
-    if (conversationDrafts) {
-      drafts = conversationDrafts.map(d => ({
-        id: d.id,
-        title: d.title || '작성 중인 요청',
-        description: '채팅을 통해 요청을 작성 중입니다.',
-        status: 'draft_chat',
-        priority: 'medium',
-        created_at: d.created_at,
-        is_chat_draft: true
-      }))
-    }
+  
+  const { data: conversationDrafts } = await supabase
+    .from('conversations')
+    .select('*')
+    .eq('user_id', user.id)
+    .is('request_id', null)
+    .is('deleted_at', null) // 삭제된 대화 제외
+    .order('created_at', { ascending: false })
+  
+  if (conversationDrafts) {
+    drafts = conversationDrafts.map(d => ({
+      id: d.id,
+      title: d.title || '작성 중인 요청',
+      description: '채팅을 통해 요청을 작성 중입니다.',
+      status: 'draft_chat',
+      priority: 'medium',
+      created_at: d.created_at,
+      is_chat_draft: true
+    }))
   }
 
   // 모든 데이터 통합 (기존 DB의 status: 'draft' 건 포함)
@@ -78,13 +78,24 @@ export default async function RequestsPage() {
   ]
 
   // 통계 계산
-  const stats = {
+  const stats = isManager ? {
     total: allRequests.length,
+    draft: allRequests.filter(r => r.status === 'draft' || r.status === 'draft_chat').length,
     requested: allRequests.filter(r => r.status === 'requested').length,
     processing: allRequests.filter(r => 
       !['draft', 'draft_chat', 'requested', 'completed', 'rejected'].includes(r.status)
     ).length,
     completed: allRequests.filter(r => r.status === 'completed').length,
+    rejected: allRequests.filter(r => r.status === 'rejected').length,
+  } : {
+    total: allRequests.length,
+    draft: allRequests.filter(r => r.status === 'draft' || r.status === 'draft_chat').length,
+    requested: 0, // 요청자 모드에서는 진행중으로 통합
+    processing: allRequests.filter(r => 
+      !['draft', 'draft_chat', 'completed', 'rejected'].includes(r.status)
+    ).length,
+    completed: allRequests.filter(r => r.status === 'completed').length,
+    rejected: allRequests.filter(r => r.status === 'rejected').length,
   }
 
   return (
@@ -99,12 +110,11 @@ export default async function RequestsPage() {
             </h1>
             <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
               <span>전체 <strong className="text-gray-900">{stats.total}</strong></span>
-              {!isManager && (
-                <span>작성중 <strong className="text-gray-600">{allRequests.filter(r => r.status.includes('draft')).length}</strong></span>
-              )}
-              <span>대기 <strong className="text-amber-600">{stats.requested}</strong></span>
+              <span>작성중 <strong className="text-gray-600">{stats.draft}</strong></span>
+              {isManager && <span>대기 <strong className="text-amber-600">{stats.requested}</strong></span>}
               <span>진행 <strong className="text-blue-600">{stats.processing}</strong></span>
               <span>완료 <strong className="text-emerald-600">{stats.completed}</strong></span>
+              <span>반려 <strong className="text-rose-600">{stats.rejected}</strong></span>
             </div>
           </div>
 

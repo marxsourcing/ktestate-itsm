@@ -185,7 +185,12 @@ export function KanbanBoard({ requests, isManager }: KanbanBoardProps) {
     return requests.filter((r) => statuses.includes(r.status))
   }
 
-  const columns = isManager ? STATUS_COLUMNS.map(col => ({ ...col, statuses: [col.id] })) : REQUESTER_COLUMNS
+  const columns = isManager 
+    ? STATUS_COLUMNS.map(col => ({ 
+        ...col, 
+        statuses: col.id === 'draft' ? ['draft', 'draft_chat'] : [col.id] 
+      })) 
+    : REQUESTER_COLUMNS
 
   return (
     <div className="flex gap-2 overflow-x-auto pb-4 px-1 h-full">

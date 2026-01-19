@@ -16,7 +16,8 @@ export async function uploadAttachment(
   formData: FormData,
   messageId?: string,
   requestId?: string,
-  commentId?: string
+  commentId?: string,
+  conversationId?: string
 ): Promise<{ attachment?: AttachmentData; error?: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -52,12 +53,11 @@ export async function uploadAttachment(
 
   // 고유한 파일 경로 생성
   const timestamp = Date.now()
-  // Supabase Storage는 한글/특수문자를 허용하지 않음 - ASCII만 허용
   const extension = file.name.split('.').pop() || ''
   const safeName = `file_${timestamp}.${extension}`
   const storagePath = `${user.id}/${safeName}`
 
-  // File을 ArrayBuffer로 변환 (Server Action 환경에서 필요)
+  // File을 ArrayBuffer로 변환
   const arrayBuffer = await file.arrayBuffer()
   const fileBuffer = new Uint8Array(arrayBuffer)
 
@@ -80,6 +80,7 @@ export async function uploadAttachment(
       message_id: messageId || null,
       request_id: requestId || null,
       comment_id: commentId || null,
+      conversation_id: conversationId || null,
       file_name: file.name,
       file_size: file.size,
       file_type: file.type,
@@ -90,7 +91,6 @@ export async function uploadAttachment(
     .single()
 
   if (dbError) {
-    // 업로드된 파일 삭제
     await supabase.storage.from('attachments').remove([storagePath])
     return { error: `파일 정보 저장에 실패했습니다: ${dbError.message}` }
   }
@@ -98,7 +98,7 @@ export async function uploadAttachment(
   // Signed URL 생성
   const { data: urlData } = await supabase.storage
     .from('attachments')
-    .createSignedUrl(storagePath, 3600) // 1시간 유효
+    .createSignedUrl(storagePath, 3600)
 
   return {
     attachment: {
@@ -135,7 +135,6 @@ export async function deleteAttachment(attachmentId: string): Promise<{ success?
     return { error: '로그인이 필요합니다.' }
   }
 
-  // 첨부파일 정보 조회
   const { data: attachment, error: fetchError } = await supabase
     .from('attachments')
     .select('*')
@@ -147,14 +146,8 @@ export async function deleteAttachment(attachmentId: string): Promise<{ success?
     return { error: '파일을 찾을 수 없습니다.' }
   }
 
-  // Storage에서 파일 삭제
-  await supabase.storage
-    .from('attachments')
-    .remove([attachment.storage_path])
+  await supabase.storage.from('attachments').remove([attachment.storage_path])
 
-  // Storage 삭제 실패는 무시 (DB 삭제 진행)
-
-  // DB에서 레코드 삭제
   const { error: dbError } = await supabase
     .from('attachments')
     .delete()
@@ -185,7 +178,6 @@ export async function getMessageAttachments(messageId: string): Promise<{ attach
     return { error: '첨부파일 조회에 실패했습니다.' }
   }
 
-  // Signed URL 추가
   const attachmentsWithUrls = await Promise.all(
     attachments.map(async (att) => {
       const { data } = await supabase.storage
@@ -197,4 +189,3 @@ export async function getMessageAttachments(messageId: string): Promise<{ attach
 
   return { attachments: attachmentsWithUrls }
 }
-

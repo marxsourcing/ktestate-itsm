@@ -7,15 +7,14 @@ import {
   ChevronLeft,
   Calendar,
   User,
-  Server,
   Clock,
-  CheckCircle2,
   MessageCircle,
-  Calculator
 } from 'lucide-react'
 import { HistoryTimeline } from './components/history-timeline'
 import { CommentsSection } from './components/comments-section'
 import { RequestChatArea } from './components/request-chat-area'
+import { RequirementCard } from '@/components/chat/requirement-card'
+import { AttachmentData } from '@/app/chat/attachments'
 
 const STATUS_CONFIG = {
   draft: { label: '작성중', color: 'bg-gray-100 text-gray-600 border-gray-200' },
@@ -98,13 +97,47 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
     return comment
   }))
 
-  // 연결된 대화 조회 (있다면)
+  // 댓글 조회 (생략)
+
+  // 대화 및 해당 대화의 첨부파일 조회
   const { data: conversation } = await supabase
     .from('conversations')
     .select('id, title, messages(*)')
     .eq('request_id', id)
-    .order('created_at', { ascending: true, referencedTable: 'messages' })
-    .single()
+    .maybeSingle()
+
+  let conversationAttachments: AttachmentData[] = []
+  
+  // 1. 요청 ID(request_id)로 직접 연결된 첨부파일 조회 (확정 시 업데이트된 파일들)
+  const { data: directAttachments } = await supabase
+    .from('attachments')
+    .select('*')
+    .eq('request_id', id)
+
+  // 2. 대화 ID(conversation_id)로 연결된 첨부파일 조회 (혹시 request_id가 업데이트 안 된 경우 대비)
+  let convAttachments: AttachmentData[] = []
+  if (conversation) {
+    const { data: attachmentsByConv } = await supabase
+      .from('attachments')
+      .select('*')
+      .eq('conversation_id', conversation.id)
+    convAttachments = (attachmentsByConv as AttachmentData[]) || []
+  }
+
+  // 중복 제거 및 병합
+  const allAttachments = [...((directAttachments as AttachmentData[]) || []), ...convAttachments]
+  const uniqueAttachments = Array.from(
+    new Map(allAttachments.map((item) => [item.id, item])).values()
+  )
+
+  if (uniqueAttachments.length > 0) {
+    conversationAttachments = await Promise.all(uniqueAttachments.map(async (att) => {
+      const { data } = await supabase.storage
+        .from('attachments')
+        .createSignedUrl(att.storage_path, 3600)
+      return { ...att, url: data?.signedUrl }
+    }))
+  }
 
   const { data: profile } = await supabase
     .from('profiles')
@@ -113,12 +146,23 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
     .single()
 
   const isManager = profile?.role === 'manager' || profile?.role === 'admin'
+  const isRequester = user.id === request.requester_id
 
   const statusConfig = STATUS_CONFIG[request.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.requested
   const priorityConfig = PRIORITY_CONFIG[request.priority as keyof typeof PRIORITY_CONFIG] || PRIORITY_CONFIG.medium
   
   const createdDate = new Date(request.created_at)
-  const completedDate = request.completed_at ? new Date(request.completed_at) : null
+
+  // RequirementCard에 전달할 데이터 형식 변환
+  const requirementData = {
+    system: request.system?.name,
+    module: request.module?.name,
+    title: request.title,
+    description: request.description,
+    category_lv1: request.category_lv1?.name,
+    category_lv2: request.category_lv2?.name,
+    attachments: conversationAttachments
+  }
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-gray-50">
@@ -155,150 +199,104 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left Panel - Request Details & Comments */}
-        <div className="w-[400px] shrink-0 border-r border-gray-200 bg-white overflow-y-auto">
+      {/* Main Content: Responsive 3-Column Layout */}
+      <div className="flex-1 flex overflow-hidden relative">
+        {/* Column 1: Request Details & Comments (Left) - Hidden on mobile, visible from lg */}
+        <div className="hidden lg:flex w-[280px] xl:w-[320px] shrink-0 border-r border-gray-200 bg-white flex-col overflow-hidden">
           {/* Request Info Card */}
-          <div className="p-4 border-b border-gray-100">
+          <div className="p-4 border-b border-gray-100 overflow-y-auto">
             <h3 className="text-sm font-semibold text-gray-500 mb-3">요청 정보</h3>
             
             <div className="space-y-3">
               {/* Description */}
-              <div className="p-3 rounded-lg bg-gray-50 text-sm text-gray-700 whitespace-pre-wrap">
+              <div className="p-3 rounded-lg bg-gray-50 text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">
                 {request.description}
               </div>
 
               {/* Meta Info Grid */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-2.5">
                 <div className="flex items-center gap-2 text-sm">
-                  <User className="size-4 text-gray-400" />
-                  <div>
-                    <span className="text-xs text-gray-400 block">요청자</span>
-                    <span className="text-gray-700">{request.requester?.full_name || request.requester?.email}</span>
+                  <User className="size-4 text-gray-400 shrink-0" />
+                  <div className="min-w-0">
+                    <span className="text-[11px] text-gray-400 block leading-none mb-1">요청자</span>
+                    <span className="text-gray-700 truncate block text-xs">{request.requester?.full_name || request.requester?.email}</span>
                   </div>
                 </div>
                 
                 <div className="flex items-center gap-2 text-sm">
-                  <User className="size-4 text-gray-400" />
-                  <div>
-                    <span className="text-xs text-gray-400 block">담당자</span>
-                    <span className="text-gray-700">{request.manager?.full_name || '미지정'}</span>
+                  <User className="size-4 text-gray-400 shrink-0" />
+                  <div className="min-w-0">
+                    <span className="text-[11px] text-gray-400 block leading-none mb-1">담당자</span>
+                    <span className="text-gray-700 truncate block text-xs">{request.manager?.full_name || '미지정'}</span>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2 text-sm">
-                  <Calendar className="size-4 text-gray-400" />
-                  <div>
-                    <span className="text-xs text-gray-400 block">신청일</span>
-                    <span className="text-gray-700">
-                      {createdDate.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  <Calendar className="size-4 text-gray-400 shrink-0" />
+                  <div className="min-w-0">
+                    <span className="text-[11px] text-gray-400 block leading-none mb-1">신청일</span>
+                    <span className="text-gray-700 text-xs">
+                      {createdDate.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}
                     </span>
                   </div>
                 </div>
-
-                {completedDate && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <CheckCircle2 className="size-4 text-emerald-500" />
-                    <div>
-                      <span className="text-xs text-gray-400 block">완료일</span>
-                      <span className="text-gray-700">
-                        {completedDate.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {request.system && (
-                  <div className="flex items-center gap-2 text-sm col-span-2">
-                    <Server className="size-4 text-gray-400" />
-                    <div>
-                      <span className="text-xs text-gray-400 block">관련 시스템</span>
-                      <span className="text-gray-700">
-                        {request.system.name}
-                        {request.module?.name && (
-                          <span className="text-gray-500"> / {request.module.name}</span>
-                        )}
-                      </span>
-                    </div>
-                  </div>
-                )}
               </div>
-
-              {/* Effort Info - Only show if request is completed and has effort data */}
-              {request.status === 'completed' && (
-                request.estimated_fp || request.actual_fp || request.estimated_md || request.actual_md
-              ) && (
-                <div className="mt-4 p-3 rounded-lg bg-emerald-50 border border-emerald-200">
-                  <div className="flex items-center gap-2 text-sm font-medium text-emerald-700 mb-2">
-                    <Calculator className="size-4" />
-                    공수 정보
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    {(request.estimated_fp || request.actual_fp) && (
-                      <div>
-                        <span className="text-xs text-emerald-600 block">Function Point (FP)</span>
-                        <div className="flex gap-2 text-gray-700">
-                          {request.estimated_fp != null && (
-                            <span>예상: {request.estimated_fp}</span>
-                          )}
-                          {request.actual_fp != null && (
-                            <span>실제: {request.actual_fp}</span>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                    {(request.estimated_md || request.actual_md) && (
-                      <div>
-                        <span className="text-xs text-emerald-600 block">Man Day (MD)</span>
-                        <div className="flex gap-2 text-gray-700">
-                          {request.estimated_md != null && (
-                            <span>예상: {request.estimated_md}</span>
-                          )}
-                          {request.actual_md != null && (
-                            <span>실제: {request.actual_md}</span>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
           </div>
 
-          {/* History Timeline */}
-          <div className="p-4 border-b border-gray-100">
-            <h3 className="text-sm font-semibold text-gray-500 mb-3 flex items-center gap-2">
-              <Clock className="size-4" />
-              처리 이력
-            </h3>
-            <HistoryTimeline history={history || []} compact />
-          </div>
+          {/* History & Comments (Scrollable) */}
+          <div className="flex-1 overflow-y-auto scrollbar-hide">
+            {/* History Timeline */}
+            <div className="p-4 border-b border-gray-100">
+              <h3 className="text-xs font-semibold text-gray-500 mb-3 flex items-center gap-2">
+                <Clock className="size-4" />
+                처리 이력
+              </h3>
+              <HistoryTimeline history={history || []} compact />
+            </div>
 
-          {/* Comments Section */}
-          <div className="p-4">
-            <h3 className="text-sm font-semibold text-gray-500 mb-3 flex items-center gap-2">
-              <MessageCircle className="size-4" />
-              댓글 ({comments?.length || 0})
-            </h3>
-            <CommentsSection
-              requestId={request.id}
-              comments={comments || []}
-              isManager={isManager}
-            />
+            {/* Comments Section */}
+            <div className="p-4">
+              <h3 className="text-xs font-semibold text-gray-500 mb-3 flex items-center gap-2">
+                <MessageCircle className="size-4" />
+                댓글 ({comments?.length || 0})
+              </h3>
+              <CommentsSection
+                requestId={request.id}
+                comments={comments || []}
+                isManager={isManager}
+              />
+            </div>
           </div>
         </div>
 
-        {/* Right Panel - AI Chat */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Column 2: AI Chat (Middle) - Main focal point */}
+        <div className="flex-1 min-w-[400px] flex flex-col overflow-hidden lg:border-r border-gray-200 bg-white">
           <RequestChatArea 
             requestId={request.id}
             conversationId={conversation?.id}
             initialMessages={conversation?.messages || []}
             requestTitle={request.title}
             requestDescription={request.description}
+            readOnly={!isRequester}
           />
+        </div>
+
+        {/* Column 3: Analysis Results (Right) - Keep visible as much as possible */}
+        <div className="hidden lg:flex w-[320px] xl:w-[380px] shrink-0 bg-white flex-col overflow-hidden">
+          <div className="p-4 border-b border-gray-200 bg-gray-50 shrink-0 flex items-center justify-between">
+            <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
+              <div className="w-1 h-4 kt-gradient rounded-full" />
+              요청 분석 결과
+            </h3>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+            <RequirementCard 
+              data={requirementData} 
+              readOnly={true}
+              excludeRequestId={id}
+            />
+          </div>
         </div>
       </div>
     </div>
