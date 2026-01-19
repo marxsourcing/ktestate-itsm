@@ -18,6 +18,15 @@ const BASE_SYSTEM_PROMPT = `당신은 KT Estate의 IT 서비스 요구사항 접
 - category_lv1: 대분류 (SR 구분 목록에서 선택)
 - category_lv2: 소분류 (SR 상세 구분 목록에서 선택)
 
+**유사 사례 참고 및 RAG 규칙:**
+1. 하단에 제공되는 [유사 사례 검색 결과]가 있다면 이를 참고하여 답변하세요.
+2. 만약 유사한 사례가 있다면 "이전에도 비슷한 요청이 있었으며, 당시에는 ~하게 처리되었습니다"와 같이 자연스럽게 언급하여 신뢰도를 높이세요.
+3. 중복된 요청이 이미 처리 중인 것 같으면 사용자에게 안내하세요.
+
+**대화 유도 및 확정 규칙:**
+1. 추출할 필수 정보(시스템, 제목, 내용 등)가 80% 이상 수집되었다고 판단되면, 답변 끝에 "내용이 충분히 정리되었습니다. 우측의 '요구사항 확정' 버튼을 눌러 접수를 완료하시겠습니까?"라는 문구를 포함하여 진행을 유도하세요.
+2. 대화가 5회 이상 이어졌음에도 정보가 부족하다면, 사용자에게 구체적인 정보 입력을 정중히 요청하세요.
+
 **중요 규칙:**
 1. 제공된 목록에 있는 명칭을 정확하게 사용하세요.
 2. 분석 데이터는 반드시 \`\`\`requirement ... \`\`\` 블록 안에 넣으세요.
@@ -27,7 +36,49 @@ const BASE_SYSTEM_PROMPT = `당신은 KT Estate의 IT 서비스 요구사항 접
 {SYSTEM_MODULE_LIST}
 
 **분류 목록 (대분류: 소분류1, 소분류2...):**
-{CATEGORY_LIST}`
+{CATEGORY_LIST}
+
+[유사 사례 검색 결과]
+{SIMILAR_CASES}`
+
+// 유사도 계산용 헬퍼 함수
+function extractKeywords(text: string): string[] {
+  const stopWords = new Set(['의', '가', '이', '은', '들', '는', '좀', '잘', '과', '도', '를', '으로', '에', '와', '한', '하다', '것', '수', '등', '및', '해주세요', '부탁', '드립니다'])
+  return text.toLowerCase().replace(/[^\w\sㄱ-ㅎㅏ-ㅣ가-힣]/g, ' ').split(/\s+/).filter(word => word.length >= 2 && !stopWords.has(word))
+}
+
+function calculateSimilarity(keywords: string[], targetText: string): number {
+  if (keywords.length === 0) return 0
+  let matchCount = 0
+  const targetLower = targetText.toLowerCase()
+  for (const keyword of keywords) {
+    if (targetLower.includes(keyword)) matchCount++
+  }
+  return (matchCount / keywords.length) * 100
+}
+
+async function getSimilarCases(supabase: SupabaseClient, message: string) {
+  const keywords = extractKeywords(message)
+  if (keywords.length === 0) return '없음'
+
+  const { data: requests } = await supabase
+    .from('service_requests')
+    .select('title, description, status, systems:system_id(name)')
+    .limit(50)
+
+  const similar = (requests || [])
+    .map(req => ({
+      ...req,
+      similarity: calculateSimilarity(keywords, `${req.title} ${req.description}`)
+    }))
+    .filter(req => req.similarity >= 30)
+    .sort((a, b) => b.similarity - a.similarity)
+    .slice(0, 3)
+
+  if (similar.length === 0) return '없음'
+
+  return similar.map(s => `- 제목: ${s.title}\n  시스템: ${(s.systems as any)?.name}\n  상태: ${s.status}\n  내용: ${s.description?.slice(0, 100)}...`).join('\n\n')
+}
 
 async function getSystemModuleList(supabase: SupabaseClient) {
   const { data: systems } = await supabase.from('systems').select('id, name').eq('status', 'active')
@@ -69,10 +120,12 @@ export async function POST(request: NextRequest) {
 
     const systemModuleList = await getSystemModuleList(supabase)
     const categoryList = await getCategoryList(supabase)
+    const similarCases = await getSimilarCases(supabase, message)
     
     const SYSTEM_PROMPT = BASE_SYSTEM_PROMPT
       .replace('{SYSTEM_MODULE_LIST}', systemModuleList)
       .replace('{CATEGORY_LIST}', categoryList)
+      .replace('{SIMILAR_CASES}', similarCases)
 
     const genAI = new GoogleGenerativeAI(geminiApiKey)
     const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })

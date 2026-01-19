@@ -8,6 +8,7 @@ import { ChatInput } from '@/components/chat/chat-input'
 import { createClient } from '@/lib/supabase/client'
 import { addMessage, updateConversationTitle } from '@/app/chat/actions'
 import type { AttachmentData } from '@/app/chat/attachments'
+import { cn } from '@/lib/utils'
 
 interface ChatAreaProps {
   conversationId: string
@@ -185,16 +186,28 @@ export function ChatArea({
       )}
 
       {/* Input */}
-      <ChatInput
-        onSend={sendMessage}
-        disabled={isConfirmed}
-        isLoading={isLocalLoading}
-        placeholder={
-          isConfirmed
-            ? '이 대화는 요구사항으로 확정되어 수정할 수 없습니다.'
-            : 'IT 시스템에 대한 요구사항을 입력하세요...'
-        }
-      />
+      <div className={cn(
+        "p-4 border-t transition-colors duration-300",
+        isConfirmed ? "bg-gray-50 border-gray-200" : "bg-white border-gray-100"
+      )}>
+        <ChatInput
+          onSend={sendMessage}
+          disabled={isConfirmed}
+          isLoading={isLocalLoading}
+          placeholder={
+            isConfirmed
+              ? '요구사항이 확정되어 더 이상 대화할 수 없습니다.'
+              : 'IT 시스템에 대한 요구사항을 입력하세요...'
+          }
+        />
+        {isConfirmed && linkedRequestId && (
+          <div className="mt-2 text-center">
+            <p className="text-xs text-gray-400">
+              이미 확정된 요청입니다. 상세 내용은 <a href={`/requests/${linkedRequestId}`} className="text-rose-500 hover:underline font-medium">요청 상세 페이지</a>에서 확인하세요.
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

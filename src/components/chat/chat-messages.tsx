@@ -159,17 +159,17 @@ export function ChatMessages({ messages, isLoading, onRequirementUpdate, exclude
 
         {/* Loading indicator */}
         {isLoading && (
-          <div className="flex gap-4">
+          <div className="flex gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
             <div className="shrink-0">
-              <div className="flex size-8 items-center justify-center rounded-full kt-gradient">
+              <div className="flex size-8 items-center justify-center rounded-full kt-gradient shadow-sm">
                 <Bot className="size-5 text-white" />
               </div>
             </div>
             <div className="rounded-2xl bg-white px-4 py-3 border border-gray-200 shadow-sm">
-              <div className="flex gap-1">
-                <span className="size-2 animate-bounce rounded-full bg-gray-400 [animation-delay:-0.3s]" />
-                <span className="size-2 animate-bounce rounded-full bg-gray-400 [animation-delay:-0.15s]" />
-                <span className="size-2 animate-bounce rounded-full bg-gray-400" />
+              <div className="flex gap-1.5 items-center h-5">
+                <span className="size-1.5 animate-bounce rounded-full bg-rose-400 [animation-delay:-0.3s]" />
+                <span className="size-1.5 animate-bounce rounded-full bg-rose-400 [animation-delay:-0.15s]" />
+                <span className="size-1.5 animate-bounce rounded-full bg-rose-400" />
               </div>
             </div>
           </div>
