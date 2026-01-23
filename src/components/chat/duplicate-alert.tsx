@@ -26,10 +26,17 @@ interface DuplicateAlertProps {
 }
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  requested: { label: '요청', color: 'bg-gray-100 text-gray-700' },
-  reviewing: { label: '검토중', color: 'bg-yellow-100 text-yellow-700' },
-  processing: { label: '처리중', color: 'bg-blue-100 text-blue-700' },
-  completed: { label: '완료', color: 'bg-green-100 text-green-700' },
+  draft: { label: '작성중', color: 'bg-gray-100 text-gray-600' },
+  requested: { label: '요청', color: 'bg-amber-100 text-amber-700' },
+  approved: { label: '승인', color: 'bg-sky-100 text-sky-700' },
+  consulting: { label: '실무협의', color: 'bg-indigo-100 text-indigo-700' },
+  accepted: { label: '접수', color: 'bg-blue-100 text-blue-700' },
+  processing: { label: '처리중', color: 'bg-violet-100 text-violet-700' },
+  test_requested: { label: '테스트요청', color: 'bg-orange-100 text-orange-700' },
+  test_completed: { label: '테스트완료', color: 'bg-teal-100 text-teal-700' },
+  deploy_requested: { label: '배포요청', color: 'bg-cyan-100 text-cyan-700' },
+  deploy_approved: { label: '배포승인', color: 'bg-lime-100 text-lime-700' },
+  completed: { label: '완료', color: 'bg-emerald-100 text-emerald-700' },
   rejected: { label: '반려', color: 'bg-red-100 text-red-700' },
 }
 

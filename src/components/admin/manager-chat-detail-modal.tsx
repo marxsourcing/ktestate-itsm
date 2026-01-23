@@ -81,9 +81,16 @@ export function ManagerChatDetailModal({
 
   function getStatusLabel(status: string) {
     const labels: Record<string, string> = {
+      draft: '작성중',
       requested: '요청',
-      reviewing: '검토중',
+      approved: '승인',
+      consulting: '실무협의',
+      accepted: '접수',
       processing: '처리중',
+      test_requested: '테스트요청',
+      test_completed: '테스트완료',
+      deploy_requested: '배포요청',
+      deploy_approved: '배포승인',
       completed: '완료',
       rejected: '반려',
     }

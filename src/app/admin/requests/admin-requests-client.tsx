@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/table'
 import { Search, Download, Loader2, ChevronLeft, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
+import { REQUEST_STATUS, REQUEST_STATUS_COLORS, type RequestStatus } from '@/lib/constants/request-types'
 
 interface Request {
   id: string
@@ -30,14 +31,6 @@ interface Request {
 
 interface AdminRequestsClientProps {
   requests: Request[]
-}
-
-const STATUS_LABELS: Record<string, string> = {
-  requested: '요청',
-  reviewing: '검토중',
-  processing: '처리중',
-  completed: '완료',
-  rejected: '반려',
 }
 
 const PRIORITY_LABELS: Record<string, string> = {
@@ -97,18 +90,19 @@ export function AdminRequestsClient({ requests }: AdminRequestsClientProps) {
   }
 
   function getStatusBadge(status: string) {
-    switch (status) {
-      case 'completed':
-        return <Badge variant="default" className="bg-green-500">{STATUS_LABELS[status]}</Badge>
-      case 'rejected':
-        return <Badge variant="destructive">{STATUS_LABELS[status]}</Badge>
-      case 'processing':
-        return <Badge variant="default" className="bg-blue-500">{STATUS_LABELS[status]}</Badge>
-      case 'reviewing':
-        return <Badge variant="secondary">{STATUS_LABELS[status]}</Badge>
-      default:
-        return <Badge variant="outline">{STATUS_LABELS[status] || status}</Badge>
+    const statusKey = status as RequestStatus
+    const label = REQUEST_STATUS[statusKey] || status
+    const colors = REQUEST_STATUS_COLORS[statusKey]
+    
+    if (colors) {
+      return (
+        <Badge variant="outline" className={`${colors.bg} ${colors.text} ${colors.border} border`}>
+          {label}
+        </Badge>
+      )
     }
+    
+    return <Badge variant="outline">{label}</Badge>
   }
 
   return (
