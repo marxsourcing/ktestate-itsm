@@ -11,9 +11,11 @@ import {
   markAsRead,
   markAllAsRead,
   deleteNotification,
+  deleteReadNotifications,
   type NotificationData
 } from '@/app/notifications/actions'
 import Link from 'next/link'
+import { toast } from 'sonner'
 
 const typeIcons: Record<string, string> = {
   request_created: '📝',
@@ -156,6 +158,17 @@ export function NotificationBell() {
     }
   }
 
+  const handleDeleteReadNotifications = async () => {
+    const result = await deleteReadNotifications()
+    if (result.success) {
+      setNotifications(prev => prev.filter(n => !n.is_read))
+      toast.success(`읽은 알림 ${result.deletedCount}개가 삭제되었습니다.`)
+    }
+  }
+
+  // 읽은 알림 개수 계산
+  const readCount = notifications.filter(n => n.is_read).length
+
   const formatTime = (dateStr: string) => {
     const date = new Date(dateStr)
     const now = new Date()
@@ -194,16 +207,27 @@ export function NotificationBell() {
           {/* Header */}
           <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
             <h3 className="font-semibold text-gray-900">알림</h3>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
               {unreadCount > 0 && (
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={handleMarkAllAsRead}
-                  className="text-xs text-gray-500 hover:text-gray-700"
+                  className="text-xs text-gray-500 hover:text-gray-700 h-7 px-2"
                 >
-                  <CheckCheck className="size-4 mr-1" />
+                  <CheckCheck className="size-3.5 mr-1" />
                   모두 읽음
+                </Button>
+              )}
+              {readCount > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleDeleteReadNotifications}
+                  className="text-xs text-gray-500 hover:text-red-600 h-7 px-2"
+                >
+                  <Trash2 className="size-3.5 mr-1" />
+                  읽은 알림 삭제
                 </Button>
               )}
             </div>
@@ -215,7 +239,7 @@ export function NotificationBell() {
               <div className="p-4 space-y-3">
                 {[...Array(3)].map((_, i) => (
                   <div key={i} className="flex gap-3 animate-pulse">
-                    <div className="size-10 bg-gray-200 rounded-full flex-shrink-0"></div>
+                    <div className="size-10 bg-gray-200 rounded-full shrink-0"></div>
                     <div className="flex-1 space-y-2">
                       <div className="h-4 bg-gray-200 rounded w-3/4"></div>
                       <div className="h-3 bg-gray-200 rounded w-1/2"></div>
@@ -239,7 +263,7 @@ export function NotificationBell() {
                     )}
                   >
                     {/* Icon */}
-                    <div className="flex-shrink-0 text-xl">
+                    <div className="shrink-0 text-xl">
                       {typeIcons[notification.type] || '🔔'}
                     </div>
 
@@ -285,7 +309,7 @@ export function NotificationBell() {
                     </div>
 
                     {/* Actions */}
-                    <div className="flex-shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       {!notification.is_read && (
                         <button
                           onClick={() => handleMarkAsRead(notification.id)}
@@ -314,18 +338,6 @@ export function NotificationBell() {
             )}
           </div>
 
-          {/* Footer */}
-          {notifications.length > 0 && (
-            <div className="border-t border-gray-100 px-4 py-2">
-              <Link
-                href="/notifications"
-                onClick={() => setIsOpen(false)}
-                className="block text-center text-sm text-rose-600 hover:text-rose-700 py-1"
-              >
-                전체 알림 보기
-              </Link>
-            </div>
-          )}
         </div>
       )}
     </div>

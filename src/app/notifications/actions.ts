@@ -148,3 +148,31 @@ export async function clearAllNotifications(): Promise<{ success?: boolean; erro
   return { success: true }
 }
 
+export async function deleteReadNotifications(): Promise<{ success?: boolean; deletedCount?: number; error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: '로그인이 필요합니다.' }
+  }
+
+  // 먼저 삭제할 개수 확인
+  const { count } = await supabase
+    .from('notifications')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', user.id)
+    .eq('is_read', true)
+
+  const { error } = await supabase
+    .from('notifications')
+    .delete()
+    .eq('user_id', user.id)
+    .eq('is_read', true)
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  return { success: true, deletedCount: count || 0 }
+}
+

@@ -81,9 +81,16 @@ export function ManagerChatDetailModal({
 
   function getStatusLabel(status: string) {
     const labels: Record<string, string> = {
+      draft: '작성중',
       requested: '요청',
-      reviewing: '검토중',
+      approved: '승인',
+      consulting: '실무협의',
+      accepted: '접수',
       processing: '처리중',
+      test_requested: '테스트요청',
+      test_completed: '테스트완료',
+      deploy_requested: '배포요청',
+      deploy_approved: '배포승인',
       completed: '완료',
       rejected: '반려',
     }
@@ -93,7 +100,7 @@ export function ManagerChatDetailModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[95vw] max-w-4xl h-[85vh] flex flex-col p-4 sm:p-6">
-        <DialogHeader className="flex-shrink-0 space-y-2 overflow-hidden">
+        <DialogHeader className="shrink-0 space-y-2 overflow-hidden">
           {/* 제목 영역 */}
           <div className="flex items-start justify-between gap-2">
             <DialogTitle className="text-base sm:text-lg leading-tight flex-1 min-w-0 flex items-center gap-2">
@@ -152,7 +159,7 @@ export function ManagerChatDetailModal({
                   }`}
                 >
                   {message.role !== 'user' && (
-                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                    <div className="shrink-0 w-8 h-8 rounded-full bg-linear-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
                       <Bot className="size-4 text-white" />
                     </div>
                   )}
@@ -171,7 +178,7 @@ export function ManagerChatDetailModal({
                     </div>
                   </div>
                   {message.role === 'user' && (
-                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center">
+                    <div className="shrink-0 w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center">
                       <User className="size-4 text-white" />
                     </div>
                   )}

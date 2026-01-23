@@ -349,40 +349,6 @@ export function AdminModulesClient({ modules, systems, managers }: Props) {
           </SelectContent>
         </Select>
       </div>
-      <div className="grid grid-cols-4 items-center gap-4">
-        <Label htmlFor="form-notify" className="text-right">
-          1선 담당자 알림
-        </Label>
-        <Select
-          value={formData.notify_primary ? 'yes' : 'no'}
-          onValueChange={(value) => setFormData((prev) => ({ ...prev, notify_primary: value === 'yes' }))}
-        >
-          <SelectTrigger className="col-span-3">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="yes">예</SelectItem>
-            <SelectItem value="no">아니오</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="grid grid-cols-4 items-center gap-4">
-        <Label htmlFor="form-delay" className="text-right">
-          접수지연 발송
-        </Label>
-        <Select
-          value={formData.delay_notification ? 'yes' : 'no'}
-          onValueChange={(value) => setFormData((prev) => ({ ...prev, delay_notification: value === 'yes' }))}
-        >
-          <SelectTrigger className="col-span-3">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="yes">예</SelectItem>
-            <SelectItem value="no">아니오</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
     </div>
   )
 
@@ -426,7 +392,6 @@ export function AdminModulesClient({ modules, systems, managers }: Props) {
               <TableHead className="w-[180px]">모듈명</TableHead>
               <TableHead className="w-[150px]">1선 담당자</TableHead>
               <TableHead className="w-[150px]">2선 담당자</TableHead>
-              <TableHead className="w-[80px]">알림</TableHead>
               <TableHead className="w-[70px]">상태</TableHead>
               <TableHead className="w-[100px] text-right">관리</TableHead>
             </TableRow>
@@ -471,16 +436,6 @@ export function AdminModulesClient({ modules, systems, managers }: Props) {
                     ) : (
                       <span className="text-gray-400">미지정</span>
                     )}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-col gap-1">
-                      {module.notify_primary && (
-                        <Badge variant="outline" className="text-xs">1선</Badge>
-                      )}
-                      {module.delay_notification && (
-                        <Badge variant="outline" className="text-xs">지연</Badge>
-                      )}
-                    </div>
                   </TableCell>
                   <TableCell>
                     <Badge variant={module.is_active ? 'default' : 'secondary'}>

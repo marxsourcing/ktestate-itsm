@@ -84,6 +84,13 @@ export function ManagerAiChat({ requestId, requestContext, onChatHistoryChange }
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  // AI 응답 완료 후 자동 포커스
+  useEffect(() => {
+    if (!isLoading && textareaRef.current) {
+      textareaRef.current.focus()
+    }
+  }, [isLoading])
+
   const sendMessage = async (messageText: string) => {
     if (!messageText.trim() || isLoading) return
 
@@ -141,6 +148,10 @@ export function ManagerAiChat({ requestId, requestContext, onChatHistoryChange }
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     sendMessage(input)
+    // 메시지 전송 후 input 포커스 유지
+    setTimeout(() => {
+      textareaRef.current?.focus()
+    }, 0)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {

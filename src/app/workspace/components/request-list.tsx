@@ -477,6 +477,54 @@ export function RequestList({
               </div>
             )}
           </div>
+
+          {/* Test Assigned Requests */}
+          {testAssignedRequests.length > 0 && (
+            <div className="p-4 border-t border-gray-200">
+              <h3 className="text-sm font-semibold text-gray-500 flex items-center gap-2 mb-3">
+                <div className="w-5 h-5 rounded bg-orange-100 flex items-center justify-center">
+                  <TestTube2 className="size-3 text-orange-600" />
+                </div>
+                테스트 요청 ({testAssignedRequests.length})
+              </h3>
+              <div className="space-y-2">
+                {testAssignedRequests.map(request => (
+                  <RequestItem
+                    key={request.id}
+                    request={request}
+                    isSelected={selectedRequest?.id === request.id}
+                    onClick={() => setSelectedRequest(request)}
+                    priority={(request.priority as keyof typeof PRIORITY_CONFIG) || 'medium'}
+                    delegationType="test"
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Deploy Assigned Requests */}
+          {deployAssignedRequests.length > 0 && (
+            <div className="p-4 border-t border-gray-200">
+              <h3 className="text-sm font-semibold text-gray-500 flex items-center gap-2 mb-3">
+                <div className="w-5 h-5 rounded bg-cyan-100 flex items-center justify-center">
+                  <Rocket className="size-3 text-cyan-600" />
+                </div>
+                배포 요청 ({deployAssignedRequests.length})
+              </h3>
+              <div className="space-y-2">
+                {deployAssignedRequests.map(request => (
+                  <RequestItem
+                    key={request.id}
+                    request={request}
+                    isSelected={selectedRequest?.id === request.id}
+                    onClick={() => setSelectedRequest(request)}
+                    priority={(request.priority as keyof typeof PRIORITY_CONFIG) || 'medium'}
+                    delegationType="deploy"
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { generateEmbedding, prepareRequestText } from '@/lib/ai/embeddings'
 
 export async function createConversation(
   title?: string, 
@@ -369,6 +370,25 @@ export async function confirmRequirement(
 
   if (reqError) {
     return { error: reqError.message }
+  }
+
+  // 벡터 임베딩 생성 및 저장 (비동기로 처리, 실패해도 요청 생성에 영향 없음)
+  try {
+    const embeddingText = prepareRequestText(
+      requirementData.title,
+      requirementData.description,
+      requirementData.system,
+      requirementData.module
+    )
+    const embedding = await generateEmbedding(embeddingText)
+    
+    await supabase
+      .from('service_requests')
+      .update({ embedding: `[${embedding.join(',')}]` })
+      .eq('id', request.id)
+  } catch (embeddingError) {
+    // 임베딩 생성 실패 시 로그만 남기고 계속 진행
+    console.error('임베딩 생성 실패:', embeddingError)
   }
 
   // 대화 상태를 confirmed로 변경하고 request_id 연결

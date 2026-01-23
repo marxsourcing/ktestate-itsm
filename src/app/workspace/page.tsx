@@ -25,57 +25,64 @@ export default async function WorkspacePage() {
     redirect('/requests')
   }
 
-  // 내게 배정된 요청 목록 조회 (진행중인 것들)
-  const { data: myRequests } = await supabase
-    .from('service_requests')
-    .select(`
-      *,
-      system:systems(id, name),
-      module:system_modules(id, name),
-      requester:profiles!service_requests_requester_id_fkey(full_name, email),
-      test_manager:profiles!service_requests_test_manager_id_fkey(full_name, email),
-      deploy_manager:profiles!service_requests_deploy_manager_id_fkey(full_name, email),
-      category_lv1:request_categories_lv1(id, name),
-      category_lv2:request_categories_lv2(id, name)
-    `)
-    .eq('manager_id', user.id)
-    .in('status', ['requested', 'approved', 'consulting', 'accepted', 'processing', 'test_requested', 'test_completed', 'deploy_requested', 'deploy_approved'])
-    .order('priority', { ascending: false })
-    .order('created_at', { ascending: true })
+  // 병렬로 모든 쿼리 실행
+  const [myRequestsResult, testAssignedResult, deployAssignedResult] = await Promise.all([
+    // 내게 배정된 요청 목록 조회 (진행중인 것들)
+    supabase
+      .from('service_requests')
+      .select(`
+        *,
+        system:systems(id, name),
+        module:system_modules(id, name),
+        requester:profiles!service_requests_requester_id_fkey(full_name, email),
+        test_manager:profiles!service_requests_test_manager_id_fkey(full_name, email),
+        deploy_manager:profiles!service_requests_deploy_manager_id_fkey(full_name, email),
+        category_lv1:request_categories_lv1(id, name),
+        category_lv2:request_categories_lv2(id, name)
+      `)
+      .eq('manager_id', user.id)
+      .in('status', ['requested', 'approved', 'consulting', 'accepted', 'processing', 'test_requested', 'test_completed', 'deploy_requested', 'deploy_approved'])
+      .order('priority', { ascending: false })
+      .order('created_at', { ascending: true }),
 
-  // 테스트 담당으로 지정된 요청 조회 (test_manager_id가 나인 경우)
-  const { data: testAssignedRequests } = await supabase
-    .from('service_requests')
-    .select(`
-      *,
-      system:systems(id, name),
-      module:system_modules(id, name),
-      requester:profiles!service_requests_requester_id_fkey(full_name, email),
-      manager:profiles!service_requests_manager_id_fkey(full_name, email),
-      category_lv1:request_categories_lv1(id, name),
-      category_lv2:request_categories_lv2(id, name)
-    `)
-    .eq('test_manager_id', user.id)
-    .neq('manager_id', user.id) // 본인이 담당자가 아닌 경우만
-    .eq('status', 'test_requested')
-    .order('created_at', { ascending: true })
+    // 테스트 담당으로 지정된 요청 조회 (test_manager_id가 나인 경우)
+    supabase
+      .from('service_requests')
+      .select(`
+        *,
+        system:systems(id, name),
+        module:system_modules(id, name),
+        requester:profiles!service_requests_requester_id_fkey(full_name, email),
+        manager:profiles!service_requests_manager_id_fkey(full_name, email),
+        category_lv1:request_categories_lv1(id, name),
+        category_lv2:request_categories_lv2(id, name)
+      `)
+      .eq('test_manager_id', user.id)
+      .neq('manager_id', user.id)
+      .eq('status', 'test_requested')
+      .order('created_at', { ascending: true }),
 
-  // 배포 승인자로 지정된 요청 조회 (deploy_manager_id가 나인 경우)
-  const { data: deployAssignedRequests } = await supabase
-    .from('service_requests')
-    .select(`
-      *,
-      system:systems(id, name),
-      module:system_modules(id, name),
-      requester:profiles!service_requests_requester_id_fkey(full_name, email),
-      manager:profiles!service_requests_manager_id_fkey(full_name, email),
-      category_lv1:request_categories_lv1(id, name),
-      category_lv2:request_categories_lv2(id, name)
-    `)
-    .eq('deploy_manager_id', user.id)
-    .neq('manager_id', user.id) // 본인이 담당자가 아닌 경우만
-    .eq('status', 'deploy_requested')
-    .order('created_at', { ascending: true })
+    // 배포 승인자로 지정된 요청 조회 (deploy_manager_id가 나인 경우)
+    supabase
+      .from('service_requests')
+      .select(`
+        *,
+        system:systems(id, name),
+        module:system_modules(id, name),
+        requester:profiles!service_requests_requester_id_fkey(full_name, email),
+        manager:profiles!service_requests_manager_id_fkey(full_name, email),
+        category_lv1:request_categories_lv1(id, name),
+        category_lv2:request_categories_lv2(id, name)
+      `)
+      .eq('deploy_manager_id', user.id)
+      .neq('manager_id', user.id)
+      .eq('status', 'deploy_requested')
+      .order('created_at', { ascending: true }),
+  ])
+
+  const myRequests = myRequestsResult.data
+  const testAssignedRequests = testAssignedResult.data
+  const deployAssignedRequests = deployAssignedResult.data
 
   return (
     <WorkspaceLayout>

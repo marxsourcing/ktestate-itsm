@@ -19,39 +19,46 @@ export default async function AdminChatsPage() {
     redirect('/')
   }
 
-  // 요청자 대화 목록 조회 (모든 사용자)
-  const { data: requesterConversations } = await supabase
-    .from('conversations')
-    .select(`
-      *,
-      user:profiles!conversations_user_id_fkey(id, full_name, email),
-      request:service_requests(
-        id, title, status,
-        category_lv1:request_categories_lv1(name),
-        category_lv2:request_categories_lv2(name)
-      )
-    `)
-    .order('updated_at', { ascending: false })
+  // 병렬로 모든 쿼리 실행
+  const [requesterConvResult, managerConvResult, usersResult] = await Promise.all([
+    // 요청자 대화 목록 조회 (모든 사용자)
+    supabase
+      .from('conversations')
+      .select(`
+        *,
+        user:profiles!conversations_user_id_fkey(id, full_name, email),
+        request:service_requests(
+          id, title, status,
+          category_lv1:request_categories_lv1(name),
+          category_lv2:request_categories_lv2(name)
+        )
+      `)
+      .order('updated_at', { ascending: false }),
 
-  // 담당자 내부 대화 목록 조회
-  const { data: managerConversations } = await supabase
-    .from('manager_conversations')
-    .select(`
-      *,
-      manager:profiles!manager_conversations_manager_id_fkey(id, full_name, email),
-      request:service_requests(
-        id, title, status,
-        category_lv1:request_categories_lv1(name),
-        category_lv2:request_categories_lv2(name)
-      )
-    `)
-    .order('updated_at', { ascending: false })
+    // 담당자 내부 대화 목록 조회
+    supabase
+      .from('manager_conversations')
+      .select(`
+        *,
+        manager:profiles!manager_conversations_manager_id_fkey(id, full_name, email),
+        request:service_requests(
+          id, title, status,
+          category_lv1:request_categories_lv1(name),
+          category_lv2:request_categories_lv2(name)
+        )
+      `)
+      .order('updated_at', { ascending: false }),
 
-  // 사용자 목록 조회 (필터용)
-  const { data: users } = await supabase
-    .from('profiles')
-    .select('id, full_name, email, role')
-    .order('full_name', { ascending: true })
+    // 사용자 목록 조회 (필터용)
+    supabase
+      .from('profiles')
+      .select('id, full_name, email, role')
+      .order('full_name', { ascending: true }),
+  ])
+
+  const requesterConversations = requesterConvResult.data
+  const managerConversations = managerConvResult.data
+  const users = usersResult.data
 
   // 담당자 목록 (필터용)
   const managers = users?.filter(u => u.role === 'manager' || u.role === 'admin') || []

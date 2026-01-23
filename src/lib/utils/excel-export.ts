@@ -103,11 +103,18 @@ export function exportToExcelMultiSheet(
   return buffer
 }
 
-// 라벨 매핑
+// 라벨 매핑 (12개 상태 체계)
 export const STATUS_LABELS: Record<string, string> = {
+  draft: '작성중',
   requested: '요청',
-  reviewing: '검토중',
+  approved: '승인',
+  consulting: '실무협의검토',
+  accepted: '접수',
   processing: '처리중',
+  test_requested: '테스트요청',
+  test_completed: '테스트완료',
+  deploy_requested: '배포요청',
+  deploy_approved: '배포승인',
   completed: '완료',
   rejected: '반려',
 }

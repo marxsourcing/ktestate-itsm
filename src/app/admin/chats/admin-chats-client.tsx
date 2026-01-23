@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Table,
   TableBody,
@@ -103,6 +104,9 @@ export function AdminChatsClient({ requesterConversations, managerConversations,
   const [currentPage, setCurrentPage] = useState(1)
   const [isExporting, setIsExporting] = useState(false)
 
+  // 체크박스 선택 상태
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
   // 필터 상태 - 요청자 탭
   const [statusFilter, setStatusFilter] = useState('all')
   const [userFilter, setUserFilter] = useState('all')
@@ -165,6 +169,14 @@ export function AdminChatsClient({ requesterConversations, managerConversations,
   const managerStartIndex = (managerCurrentPage - 1) * PAGE_SIZE
   const paginatedManagerConversations = filteredManagerConversations.slice(managerStartIndex, managerStartIndex + PAGE_SIZE)
 
+  // 현재 페이지의 모든 항목이 선택되었는지 확인
+  const isAllCurrentPageSelected = paginatedRequesterConversations.length > 0 && 
+    paginatedRequesterConversations.every((conv) => selectedIds.has(conv.id))
+  
+  // 필터링된 전체 항목이 선택되었는지 확인
+  const isAllFilteredSelected = filteredRequesterConversations.length > 0 && 
+    filteredRequesterConversations.every((conv) => selectedIds.has(conv.id))
+
   // 필터 변경 시 첫 페이지로 이동
   function handleFilterChange() {
     setCurrentPage(1)
@@ -177,11 +189,44 @@ export function AdminChatsClient({ requesterConversations, managerConversations,
   function handleSearchChange(value: string) {
     setSearchTerm(value)
     setCurrentPage(1)
+    setSelectedIds(new Set()) // 검색 변경 시 선택 초기화
   }
 
   function handleManagerSearchChange(value: string) {
     setManagerSearchTerm(value)
     setManagerCurrentPage(1)
+  }
+
+  function handleSelectAll(checked: boolean) {
+    if (checked) {
+      const newSelected = new Set(selectedIds)
+      paginatedRequesterConversations.forEach((conv) => newSelected.add(conv.id))
+      setSelectedIds(newSelected)
+    } else {
+      const newSelected = new Set(selectedIds)
+      paginatedRequesterConversations.forEach((conv) => newSelected.delete(conv.id))
+      setSelectedIds(newSelected)
+    }
+  }
+
+  function handleSelectAllFiltered() {
+    const newSelected = new Set<string>()
+    filteredRequesterConversations.forEach((conv) => newSelected.add(conv.id))
+    setSelectedIds(newSelected)
+  }
+
+  function handleSelectOne(id: string, checked: boolean) {
+    const newSelected = new Set(selectedIds)
+    if (checked) {
+      newSelected.add(id)
+    } else {
+      newSelected.delete(id)
+    }
+    setSelectedIds(newSelected)
+  }
+
+  function handleClearSelection() {
+    setSelectedIds(new Set())
   }
 
   function clearFilters() {
@@ -191,6 +236,7 @@ export function AdminChatsClient({ requesterConversations, managerConversations,
     setStartDate('')
     setEndDate('')
     setCurrentPage(1)
+    setSelectedIds(new Set())
   }
 
   function clearManagerFilters() {
@@ -240,12 +286,21 @@ export function AdminChatsClient({ requesterConversations, managerConversations,
   async function handleExport() {
     setIsExporting(true)
     try {
-      // 필터 파라미터 추가
+      // 선택된 항목이 있으면 선택된 항목만, 없으면 필터링된 전체 목록 내보내기
+      const idsToExport = selectedIds.size > 0 
+        ? Array.from(selectedIds) 
+        : filteredRequesterConversations.map((conv) => conv.id)
+      
       const params = new URLSearchParams({ type: 'chats' })
-      if (statusFilter !== 'all') params.append('status', statusFilter)
-      if (userFilter !== 'all') params.append('userId', userFilter)
-      if (startDate) params.append('startDate', startDate)
-      if (endDate) params.append('endDate', endDate)
+      if (selectedIds.size > 0 || idsToExport.length < filteredRequesterConversations.length) {
+        params.set('ids', idsToExport.join(','))
+      } else {
+        // 필터 파라미터 추가 (선택 없이 필터링된 전체 내보내기)
+        if (statusFilter !== 'all') params.append('status', statusFilter)
+        if (userFilter !== 'all') params.append('userId', userFilter)
+        if (startDate) params.append('startDate', startDate)
+        if (endDate) params.append('endDate', endDate)
+      }
 
       const response = await fetch(`/api/admin/export?${params.toString()}`)
       if (!response.ok) throw new Error('Export failed')
@@ -369,7 +424,23 @@ export function AdminChatsClient({ requesterConversations, managerConversations,
 
               <span className="text-sm text-gray-500">
                 총 {filteredRequesterConversations.length}건
+                {selectedIds.size > 0 && (
+                  <span className="ml-2 text-blue-600 font-medium">
+                    ({selectedIds.size}건 선택됨)
+                  </span>
+                )}
               </span>
+
+              {selectedIds.size > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleClearSelection}
+                  className="h-9 text-gray-500"
+                >
+                  선택 해제
+                </Button>
+              )}
 
               <Button
                 variant="outline"
@@ -383,9 +454,26 @@ export function AdminChatsClient({ requesterConversations, managerConversations,
                 ) : (
                   <Download className="size-4 mr-1.5" />
                 )}
-                Excel
+                {selectedIds.size > 0 
+                  ? `선택 항목 내보내기 (${selectedIds.size}건)` 
+                  : `Excel 내보내기 (${filteredRequesterConversations.length}건)`}
               </Button>
             </div>
+
+            {/* 전체 선택 안내 */}
+            {selectedIds.size > 0 && !isAllFilteredSelected && (
+              <div className="flex items-center gap-2 text-sm text-blue-700 mt-3">
+                <span>현재 {selectedIds.size}건이 선택되었습니다.</span>
+                <Button
+                  variant="link"
+                  size="sm"
+                  onClick={handleSelectAllFiltered}
+                  className="text-blue-700 h-auto p-0 underline"
+                >
+                  필터링된 전체 {filteredRequesterConversations.length}건 모두 선택
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* Table */}
@@ -393,6 +481,13 @@ export function AdminChatsClient({ requesterConversations, managerConversations,
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-[50px]">
+                    <Checkbox
+                      checked={isAllCurrentPageSelected}
+                      onCheckedChange={handleSelectAll}
+                      aria-label="현재 페이지 전체 선택"
+                    />
+                  </TableHead>
                   <TableHead className="w-[80px]">상태</TableHead>
                   <TableHead>대화 제목</TableHead>
                   <TableHead>요청자</TableHead>
@@ -408,9 +503,16 @@ export function AdminChatsClient({ requesterConversations, managerConversations,
                   paginatedRequesterConversations.map((conv) => (
                     <TableRow
                       key={conv.id}
-                      className="cursor-pointer hover:bg-gray-50"
+                      className={`cursor-pointer hover:bg-gray-50 ${selectedIds.has(conv.id) ? 'bg-blue-50' : ''}`}
                       onClick={() => handleRequesterRowClick(conv)}
                     >
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={selectedIds.has(conv.id)}
+                          onCheckedChange={(checked) => handleSelectOne(conv.id, checked as boolean)}
+                          aria-label={`${conv.title} 선택`}
+                        />
+                      </TableCell>
                       <TableCell>
                         {getStatusBadge(conv.status)}
                       </TableCell>
@@ -463,7 +565,7 @@ export function AdminChatsClient({ requesterConversations, managerConversations,
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={8} className="h-24 text-center text-gray-500">
+                    <TableCell colSpan={9} className="h-24 text-center text-gray-500">
                       {hasActiveFilters ? '검색 결과가 없습니다.' : '요청자 채팅 내역이 없습니다.'}
                     </TableCell>
                   </TableRow>

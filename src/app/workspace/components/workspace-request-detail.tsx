@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -29,7 +29,16 @@ import {
   Loader2,
   X,
   Sparkles,
-  ArrowLeftRight
+  ArrowLeftRight,
+  Paperclip,
+  Download,
+  FileSearch,
+  ExternalLink,
+  Copy,
+  ChevronDown,
+  ChevronUp,
+  AlertCircle,
+  RefreshCw
 } from 'lucide-react'
 import { ManagerAiChat } from './manager-ai-chat'
 import { OriginalChatModal } from './original-chat-modal'
@@ -43,7 +52,16 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { assignRequest, updateRequestStatus, updateRequestStatusWithReason, updateRequestWithDeployInfo, getManagers, requestTest, completeTest, approveDeploy, approveBatchDeploy, getBatchDeployRequests } from '../actions'
 import { uploadAttachment } from '@/app/chat/attachments'
+import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
+
+interface AttachmentData {
+  id: string
+  file_name: string
+  file_type: string | null
+  storage_path: string
+  url?: string
+}
 
 interface AssignedRequest {
   id: string
@@ -141,6 +159,67 @@ export function WorkspaceRequestDetail({
   }>>([])
   const [isBatchDeployLoading, setIsBatchDeployLoading] = useState(false)
   const [isBatchLoading, setIsBatchLoading] = useState(false)
+  const [attachments, setAttachments] = useState<AttachmentData[]>([])
+  const [isLoadingAttachments, setIsLoadingAttachments] = useState(false)
+
+  // 첨부파일 로드
+  useEffect(() => {
+    const loadAttachments = async () => {
+      setIsLoadingAttachments(true)
+      try {
+        const supabase = createClient()
+        
+        // 1. request_id로 직접 연결된 첨부파일 조회
+        const { data: directAttachments } = await supabase
+          .from('attachments')
+          .select('id, file_name, file_type, storage_path')
+          .eq('request_id', request.id)
+        
+        // 2. conversation을 통해 연결된 첨부파일 조회
+        const { data: conversation } = await supabase
+          .from('conversations')
+          .select('id')
+          .eq('request_id', request.id)
+          .maybeSingle()
+        
+        let convAttachments: AttachmentData[] = []
+        if (conversation) {
+          const { data } = await supabase
+            .from('attachments')
+            .select('id, file_name, file_type, storage_path')
+            .eq('conversation_id', conversation.id)
+          convAttachments = (data as AttachmentData[]) || []
+        }
+        
+        // 중복 제거 및 병합
+        const allAttachments = [...((directAttachments as AttachmentData[]) || []), ...convAttachments]
+        const uniqueAttachments = Array.from(
+          new Map(allAttachments.map((item) => [item.id, item])).values()
+        )
+        
+        // Signed URL 생성
+        if (uniqueAttachments.length > 0) {
+          const attachmentsWithUrls = await Promise.all(
+            uniqueAttachments.map(async (att) => {
+              const { data } = await supabase.storage
+                .from('attachments')
+                .createSignedUrl(att.storage_path, 3600)
+              return { ...att, url: data?.signedUrl }
+            })
+          )
+          setAttachments(attachmentsWithUrls)
+        } else {
+          setAttachments([])
+        }
+      } catch (error) {
+        console.error('첨부파일 로드 오류:', error)
+      } finally {
+        setIsLoadingAttachments(false)
+      }
+    }
+    
+    loadAttachments()
+  }, [request.id])
 
   // 담당자 목록 로드
   useEffect(() => {
@@ -177,14 +256,10 @@ export function WorkspaceRequestDetail({
 
   if (viewMode === 'side-panel') {
     return (
-      <div className="h-full overflow-y-auto p-4 space-y-6 bg-gray-50">
-        <SimilarCasesPanel
-          requestId={request.id}
-          requestTitle={request.title}
-          requestDescription={request.description}
-          systemName={request.system?.name}
-        />
-      </div>
+      <SidePanelContent
+        request={request}
+        currentUserId={currentUserId}
+      />
     )
   }
 
@@ -540,6 +615,51 @@ export function WorkspaceRequestDetail({
                 </div>
               </div>
             )}
+
+            {/* 첨부파일 섹션 */}
+            <div className="mt-3 p-3 rounded-lg bg-gray-50 border border-gray-200">
+              <div className="flex items-center gap-2 text-xs font-medium text-gray-700 mb-2">
+                <Paperclip className="size-3" />
+                첨부파일 {attachments.length > 0 && `(${attachments.length})`}
+              </div>
+              {isLoadingAttachments ? (
+                <div className="flex items-center justify-center py-3">
+                  <Loader2 className="size-4 animate-spin text-gray-400" />
+                </div>
+              ) : attachments.length > 0 ? (
+                <div className="space-y-1.5">
+                  {attachments.map((att) => (
+                    <a
+                      key={att.id}
+                      href={att.url || '#'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 p-2 rounded-lg bg-white hover:bg-gray-100 transition-colors group border border-gray-100"
+                    >
+                      {att.file_type?.startsWith('image/') ? (
+                        <div className="size-8 rounded overflow-hidden bg-gray-200 shrink-0">
+                          {att.url && (
+                            <img src={att.url} alt={att.file_name} className="size-full object-cover" />
+                          )}
+                        </div>
+                      ) : (
+                        <div className="size-8 rounded bg-gray-200 flex items-center justify-center shrink-0">
+                          <FileText className="size-4 text-gray-400" />
+                        </div>
+                      )}
+                      <span className="text-xs text-gray-600 truncate flex-1 group-hover:text-gray-900">
+                        {att.file_name}
+                      </span>
+                      <Download className="size-3 text-gray-400 group-hover:text-gray-600 shrink-0" />
+                    </a>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400 text-center py-2">
+                  첨부된 파일이 없습니다.
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Similar Cases Panel (Only in full mode) */}
@@ -1032,6 +1152,324 @@ export function WorkspaceRequestDetail({
           priority: request.priority
         }}
       />
+    </div>
+  )
+}
+
+// 우측 사이드 패널 컴포넌트 (유사 사례 검색)
+function SidePanelContent({
+  request
+}: {
+  request: AssignedRequest
+  currentUserId: string
+}) {
+  return (
+    <div className="h-full flex flex-col bg-white">
+      <SimilarCasesPanelFull
+        requestId={request.id}
+        requestTitle={request.title}
+        requestDescription={request.description}
+        systemName={request.system?.name}
+      />
+    </div>
+  )
+}
+
+// 전체 높이 사용하는 유사 사례 패널
+
+interface SimilarCase {
+  id: string
+  title: string
+  description: string
+  status: string
+  system_name: string | null
+  created_at: string
+  similarity: number
+  category_lv1_name?: string | null
+  category_lv2_name?: string | null
+  comments?: Array<{
+    content: string
+    is_internal: boolean
+    author_name?: string
+    created_at: string
+  }>
+}
+
+const SIMILAR_STATUS_CONFIG: Record<string, { label: string; color: string }> = {
+  completed: { label: '완료', color: 'text-emerald-600' },
+  processing: { label: '처리중', color: 'text-blue-600' },
+  reviewing: { label: '검토중', color: 'text-amber-600' },
+  requested: { label: '요청', color: 'text-gray-500' },
+  rejected: { label: '반려', color: 'text-red-600' },
+}
+
+function SimilarCasesPanelFull({
+  requestId,
+  requestTitle,
+  requestDescription,
+  systemName
+}: {
+  requestId: string
+  requestTitle: string
+  requestDescription: string
+  systemName?: string
+}) {
+  const [similarCases, setSimilarCases] = useState<SimilarCase[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [isSearched, setIsSearched] = useState(false)
+  const [expandedCaseId, setExpandedCaseId] = useState<string | null>(null)
+  const [loadingComments, setLoadingComments] = useState<string | null>(null)
+
+  const searchSimilarCases = useCallback(async () => {
+    setIsLoading(true)
+    setIsSearched(true)
+
+    try {
+      const response = await fetch('/api/ai/similar-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: requestTitle,
+          description: requestDescription,
+          system: systemName,
+          excludeId: requestId
+        })
+      })
+
+      if (!response.ok) throw new Error('검색 실패')
+
+      const data = await response.json()
+      setSimilarCases(data.similarRequests || [])
+    } catch (error) {
+      console.error('Similar cases search error:', error)
+      toast.error('유사 사례 검색 중 오류가 발생했습니다.')
+      setSimilarCases([])
+    } finally {
+      setIsLoading(false)
+    }
+  }, [requestId, requestTitle, requestDescription, systemName])
+
+  useEffect(() => {
+    setSimilarCases([])
+    setIsSearched(false)
+    setExpandedCaseId(null)
+    if (requestId && requestTitle) {
+      searchSimilarCases()
+    }
+  }, [requestId, requestTitle, searchSimilarCases])
+
+  const loadComments = async (caseId: string) => {
+    setLoadingComments(caseId)
+    try {
+      const response = await fetch(`/api/requests/${caseId}/comments`)
+      if (response.ok) {
+        const data = await response.json()
+        setSimilarCases(prev =>
+          prev.map(c => c.id === caseId ? { ...c, comments: data.comments } : c)
+        )
+      }
+    } catch (error) {
+      console.error('Load comments error:', error)
+    } finally {
+      setLoadingComments(null)
+    }
+  }
+
+  const toggleExpand = async (caseId: string) => {
+    if (expandedCaseId === caseId) {
+      setExpandedCaseId(null)
+    } else {
+      setExpandedCaseId(caseId)
+      const selectedCase = similarCases.find(c => c.id === caseId)
+      if (selectedCase && !selectedCase.comments) {
+        await loadComments(caseId)
+      }
+    }
+  }
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      toast.success('클립보드에 복사되었습니다.')
+    } catch {
+      toast.error('복사 실패')
+    }
+  }
+
+  const getSimilarityColor = (similarity: number) => {
+    if (similarity >= 80) return 'text-red-600 bg-red-50'
+    if (similarity >= 60) return 'text-orange-600 bg-orange-50'
+    if (similarity >= 40) return 'text-amber-600 bg-amber-50'
+    return 'text-gray-600 bg-gray-50'
+  }
+
+  return (
+    <div className="h-full flex flex-col">
+      {/* 헤더 */}
+      <div className="shrink-0 flex items-center justify-between px-4 py-3 bg-linear-to-br from-indigo-50 to-purple-50 border-b">
+        <div className="flex items-center gap-2">
+          <FileSearch className="size-4 text-indigo-600" />
+          <span className="text-sm font-medium text-gray-700">
+            {similarCases.length > 0 ? `${similarCases.length}건의 유사 사례` : '유사 사례'}
+          </span>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={searchSimilarCases}
+          disabled={isLoading}
+          className="text-xs gap-1.5 h-7"
+        >
+          {isLoading ? (
+            <Loader2 className="size-3 animate-spin" />
+          ) : (
+            <RefreshCw className="size-3" />
+          )}
+          다시 검색
+        </Button>
+      </div>
+
+      {/* 컨텐츠 */}
+      <div className="flex-1 overflow-y-auto p-4">
+        {!isSearched ? (
+          <div className="text-center py-12 text-gray-500">
+            <FileSearch className="size-12 mx-auto mb-4 text-gray-300" />
+            <p className="text-sm">유사 사례를 검색 중입니다...</p>
+          </div>
+        ) : isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="size-8 animate-spin text-indigo-500" />
+          </div>
+        ) : similarCases.length === 0 ? (
+          <div className="text-center py-12 text-gray-500">
+            <AlertCircle className="size-12 mx-auto mb-4 text-gray-300" />
+            <p className="text-sm font-medium">유사한 사례를 찾지 못했습니다</p>
+            <p className="text-xs mt-1 text-gray-400">새로운 유형의 요청일 수 있습니다</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {similarCases.map((caseItem) => {
+              const statusConfig = SIMILAR_STATUS_CONFIG[caseItem.status] || SIMILAR_STATUS_CONFIG.requested
+              const isExpanded = expandedCaseId === caseItem.id
+
+              return (
+                <div
+                  key={caseItem.id}
+                  className="border border-gray-200 rounded-lg overflow-hidden hover:border-indigo-200 transition-colors bg-white"
+                >
+                  {/* 케이스 헤더 */}
+                  <div
+                    className="p-4 cursor-pointer hover:bg-gray-50"
+                    onClick={() => toggleExpand(caseItem.id)}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span
+                            className={cn(
+                              'text-xs font-bold px-2 py-0.5 rounded',
+                              getSimilarityColor(caseItem.similarity)
+                            )}
+                          >
+                            {caseItem.similarity}% 유사
+                          </span>
+                          <span className={cn('text-xs', statusConfig.color)}>
+                            {statusConfig.label}
+                          </span>
+                        </div>
+                        <h4 className="text-sm font-medium text-gray-900 line-clamp-2">
+                          {caseItem.title}
+                        </h4>
+                        <div className="flex items-center gap-2 mt-2 text-xs text-gray-500">
+                          {caseItem.category_lv1_name && (
+                            <span className="text-rose-600">
+                              {caseItem.category_lv1_name}
+                              {caseItem.category_lv2_name && ` / ${caseItem.category_lv2_name}`}
+                            </span>
+                          )}
+                          {caseItem.system_name && (
+                            <>
+                              <span>•</span>
+                              <span>{caseItem.system_name}</span>
+                            </>
+                          )}
+                          <span>•</span>
+                          <span>{new Date(caseItem.created_at).toLocaleDateString('ko-KR')}</span>
+                        </div>
+                      </div>
+                      <button className="p-1 text-gray-400 hover:text-gray-600 shrink-0">
+                        {isExpanded ? <ChevronUp className="size-5" /> : <ChevronDown className="size-5" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 확장된 컨텐츠 */}
+                  {isExpanded && (
+                    <div className="border-t border-gray-100 p-4 bg-gray-50 space-y-4">
+                      <div>
+                        <h5 className="text-xs font-semibold text-gray-500 mb-2">요청 내용</h5>
+                        <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                          {caseItem.description || '내용 없음'}
+                        </p>
+                      </div>
+
+                      {loadingComments === caseItem.id ? (
+                        <div className="flex items-center justify-center py-4">
+                          <Loader2 className="size-5 animate-spin text-gray-400" />
+                        </div>
+                      ) : caseItem.comments && caseItem.comments.length > 0 ? (
+                        <div>
+                          <h5 className="text-xs font-semibold text-gray-500 mb-2">
+                            처리 답변 ({caseItem.comments.filter(c => !c.is_internal).length}건)
+                          </h5>
+                          <div className="space-y-2">
+                            {caseItem.comments
+                              .filter(c => !c.is_internal)
+                              .map((comment, idx) => (
+                                <div key={idx} className="bg-white border border-gray-200 rounded-lg p-3">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="text-xs text-gray-500">
+                                      {comment.author_name || '담당자'} • {new Date(comment.created_at).toLocaleDateString('ko-KR')}
+                                    </span>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        copyToClipboard(comment.content)
+                                      }}
+                                      className="p-1.5 text-gray-400 hover:text-indigo-600 rounded hover:bg-indigo-50"
+                                      title="답변 복사"
+                                    >
+                                      <Copy className="size-3.5" />
+                                    </button>
+                                  </div>
+                                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{comment.content}</p>
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-gray-400">등록된 답변이 없습니다</p>
+                      )}
+
+                      <div className="flex items-center gap-3 pt-3 border-t border-gray-200">
+                        <Link
+                          href={`/requests/${caseItem.id}`}
+                          target="_blank"
+                          className="flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-700 font-medium"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <ExternalLink className="size-3.5" />
+                          상세 페이지 열기
+                        </Link>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

@@ -20,7 +20,7 @@ interface RequestData {
   created_at: string
   updated_at: string
   requester: { full_name: string | null; email: string } | null
-  assignee: { full_name: string | null; email: string } | null
+  manager: { full_name: string | null; email: string } | null
   system: { name: string } | null
   category_lv1: { name: string } | null
   category_lv2: { name: string } | null
@@ -80,6 +80,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const exportType = searchParams.get('type') // 'requests' | 'chats' | 'messages'
   const conversationId = searchParams.get('conversationId')
+  const ids = searchParams.get('ids') // 선택된 ID 목록 (콤마 구분)
 
   // 채팅 필터 파라미터
   const status = searchParams.get('status') || undefined
@@ -93,12 +94,14 @@ export async function GET(request: NextRequest) {
 
     switch (exportType) {
       case 'requests':
-        buffer = await exportRequests(supabase)
+        const requestIds = ids ? ids.split(',').filter(Boolean) : undefined
+        buffer = await exportRequests(supabase, requestIds)
         filename = `서비스요청_${formatDateForFilename()}.xlsx`
         break
 
       case 'chats':
-        buffer = await exportChats(supabase, { status, userId, startDate, endDate })
+        const chatIds = ids ? ids.split(',').filter(Boolean) : undefined
+        buffer = await exportChats(supabase, { status, userId, startDate, endDate, ids: chatIds })
         filename = `채팅내역_${formatDateForFilename()}.xlsx`
         break
 
@@ -152,21 +155,32 @@ function formatDateTime(dateString: string): string {
 }
 
 async function exportRequests(
-  supabase: Awaited<ReturnType<typeof createClient>>
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  ids?: string[]
 ): Promise<ArrayBuffer> {
-  const { data: requests } = await supabase
+  let query = supabase
     .from('service_requests')
     .select(
       `
       *,
       requester:profiles!service_requests_requester_id_fkey(full_name, email),
-      assignee:profiles!service_requests_assignee_id_fkey(full_name, email),
+      manager:profiles!service_requests_manager_id_fkey(full_name, email),
       system:systems(name),
       category_lv1:request_categories_lv1(name),
       category_lv2:request_categories_lv2(name)
     `
     )
-    .order('created_at', { ascending: false })
+
+  // 특정 ID만 내보내기
+  if (ids && ids.length > 0) {
+    query = query.in('id', ids)
+  }
+
+  const { data: requests, error } = await query.order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('Export requests error:', error)
+  }
 
   const columns: ExportColumn<RequestData>[] = [
     { header: '상태', accessor: (r) => STATUS_LABELS[r.status] || r.status, width: 10 },
@@ -175,7 +189,7 @@ async function exportRequests(
     { header: 'SR 상세 구분', accessor: (r) => r.category_lv2?.name || '-', width: 15 },
     { header: '우선순위', accessor: (r) => PRIORITY_LABELS[r.priority] || r.priority, width: 10 },
     { header: '요청자', accessor: (r) => r.requester?.full_name || r.requester?.email || '-', width: 15 },
-    { header: '담당자', accessor: (r) => r.assignee?.full_name || r.assignee?.email || '-', width: 15 },
+    { header: '담당자', accessor: (r) => r.manager?.full_name || r.manager?.email || '-', width: 15 },
     { header: '시스템', accessor: (r) => r.system?.name || '-', width: 20 },
     { header: '생성일', accessor: (r) => formatDateTime(r.created_at), width: 18 },
     { header: '수정일', accessor: (r) => formatDateTime(r.updated_at), width: 18 },
@@ -193,6 +207,7 @@ interface ChatFilters {
   userId?: string
   startDate?: string
   endDate?: string
+  ids?: string[]
 }
 
 // 메시지 내보내기용 플랫 데이터 타입
@@ -221,6 +236,11 @@ async function exportChats(
       )
     `
     )
+
+  // 특정 ID만 내보내기
+  if (filters?.ids && filters.ids.length > 0) {
+    query = query.in('id', filters.ids)
+  }
 
   // 필터 적용
   if (filters?.status) {

@@ -90,7 +90,8 @@ async function getSimilarCases(supabase: SupabaseClient, message: string) {
       .limit(1)
     
     const resolution = comments?.[0]?.content || '해결 방법 정보 없음'
-    return `- 제목: ${s.title} (${Math.round(s.similarity)}% 유사)\n  시스템: ${(s.systems as any)?.name}\n  상태: ${s.status}\n  내용: ${s.description?.slice(0, 100)}...\n  해결방법: ${resolution}`
+    const systemName = (s.systems as { name?: string } | null)?.name || '미지정'
+    return `- 제목: ${s.title} (${Math.round(s.similarity)}% 유사)\n  시스템: ${systemName}\n  상태: ${s.status}\n  내용: ${s.description?.slice(0, 100)}...\n  해결방법: ${resolution}`
   }))
 
   return casesWithResolution.join('\n\n')
@@ -130,13 +131,13 @@ export async function POST(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: '인증 필요' }, { status: 401 })
 
-    const { message, messages } = await request.json()
+    const { message, messages, attachments } = await request.json()
     const geminiApiKey = process.env.GEMINI_API_KEY
     if (!geminiApiKey) return NextResponse.json({ error: 'API 키 누락' }, { status: 500 })
 
     const systemModuleList = await getSystemModuleList(supabase)
     const categoryList = await getCategoryList(supabase)
-    const similarCases = await getSimilarCases(supabase, message)
+    const similarCases = await getSimilarCases(supabase, message || '')
     
     const SYSTEM_PROMPT = BASE_SYSTEM_PROMPT
       .replace('{SYSTEM_MODULE_LIST}', systemModuleList)
@@ -146,17 +147,57 @@ export async function POST(request: NextRequest) {
     const genAI = new GoogleGenerativeAI(geminiApiKey)
     const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
 
-    const chatHistory = messages.slice(-10).map((m: { role: string; content: string }) => ({
+    // 대화 기록에서 첫 번째가 'model'이면 필터링
+    const filteredMessages = messages.slice(-10)
+    let chatHistory = filteredMessages.map((m: { role: string; content: string }) => ({
       role: m.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: m.content }],
     }))
+    
+    // Gemini는 첫 번째 메시지가 user여야 함
+    while (chatHistory.length > 0 && chatHistory[0].role === 'model') {
+      chatHistory = chatHistory.slice(1)
+    }
+
+    // 메시지 파트 구성 (텍스트 + 이미지)
+    const messageParts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = []
+
+    // 이미지 첨부파일 처리
+    if (attachments && attachments.length > 0) {
+      for (const attachment of attachments) {
+        if (attachment.file_type?.startsWith('image/') && attachment.url) {
+          try {
+            const imageResponse = await fetch(attachment.url)
+            if (imageResponse.ok) {
+              const imageBuffer = await imageResponse.arrayBuffer()
+              const base64Data = Buffer.from(imageBuffer).toString('base64')
+              messageParts.push({
+                inlineData: {
+                  mimeType: attachment.file_type,
+                  data: base64Data
+                }
+              })
+            }
+          } catch (error) {
+            console.error('Failed to fetch image:', error)
+          }
+        }
+      }
+    }
+
+    // 텍스트 메시지 추가
+    if (message) {
+      messageParts.push({ text: message })
+    } else if (messageParts.length > 0) {
+      messageParts.push({ text: '이 이미지를 분석해주세요.' })
+    }
 
     const chat = model.startChat({
       history: chatHistory,
       systemInstruction: { role: 'user', parts: [{ text: SYSTEM_PROMPT }] },
     })
 
-    const result = await chat.sendMessage(message)
+    const result = await chat.sendMessage(messageParts)
     const aiResponse = result.response.text()
 
     // 데이터 파싱

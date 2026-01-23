@@ -7,16 +7,23 @@ import {
   Pie,
   Cell,
   ResponsiveContainer,
-  Tooltip,
-  Legend
+  Tooltip
 } from 'recharts'
 
-const COLORS = {
-  requested: '#f59e0b',
-  reviewing: '#3b82f6',
-  processing: '#8b5cf6',
-  completed: '#10b981',
-  rejected: '#ef4444'
+// 12개 상태에 모두 고유한 색상 지정
+const COLORS: Record<string, string> = {
+  draft: '#9ca3af',         // 회색 - 작성중
+  requested: '#f59e0b',     // 주황색 - 요청
+  approved: '#3b82f6',      // 파란색 - 승인
+  consulting: '#06b6d4',    // 시안색 - 실무협의
+  accepted: '#6366f1',      // 인디고색 - 접수
+  processing: '#8b5cf6',    // 보라색 - 처리중
+  test_requested: '#ec4899', // 핑크색 - 테스트요청
+  test_completed: '#d946ef', // 자홍색 - 테스트완료
+  deploy_requested: '#14b8a6', // 틸색 - 배포요청
+  deploy_approved: '#0ea5e9', // 하늘색 - 배포승인
+  completed: '#10b981',     // 초록색 - 완료
+  rejected: '#ef4444'       // 빨간색 - 반려
 }
 
 export function StatusDistribution() {
@@ -59,7 +66,7 @@ export function StatusDistribution() {
   return (
     <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
       <h3 className="text-lg font-semibold text-gray-900 mb-4">상태별 분포</h3>
-      <div className="h-64">
+      <div className="h-72">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
@@ -68,19 +75,15 @@ export function StatusDistribution() {
               cx="50%"
               cy="50%"
               innerRadius={60}
-              outerRadius={90}
+              outerRadius={95}
               paddingAngle={2}
               dataKey="count"
               nameKey="label"
-              label={({ name, percent }: { name?: string; percent?: number }) => 
-                `${name || ''} ${((percent || 0) * 100).toFixed(0)}%`
-              }
-              labelLine={false}
             >
               {data.map((entry) => (
                 <Cell 
                   key={`cell-${entry.status}`} 
-                  fill={COLORS[entry.status as keyof typeof COLORS]}
+                  fill={COLORS[entry.status] || '#6b7280'}
                   stroke="none"
                 />
               ))}
@@ -99,14 +102,14 @@ export function StatusDistribution() {
       </div>
       
       {/* Legend */}
-      <div className="mt-4 flex flex-wrap justify-center gap-4">
+      <div className="mt-4 flex flex-wrap justify-center gap-3">
         {data.map((entry) => (
-          <div key={entry.status} className="flex items-center gap-2">
+          <div key={entry.status} className="flex items-center gap-1.5">
             <div 
-              className="size-3 rounded-full" 
-              style={{ backgroundColor: COLORS[entry.status as keyof typeof COLORS] }}
+              className="size-2.5 rounded-full" 
+              style={{ backgroundColor: COLORS[entry.status] || '#6b7280' }}
             />
-            <span className="text-sm text-gray-600">
+            <span className="text-xs text-gray-600">
               {entry.label}: {entry.count}건
             </span>
           </div>

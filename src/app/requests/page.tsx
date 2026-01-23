@@ -24,8 +24,8 @@ export default async function RequestsPage() {
   const isManagerOnly = profile?.role === 'manager'
   const isManager = isManagerOnly || isAdmin // UI용 (관리 권한 여부)
 
-  // 요청 목록 조회 (관리자: 전체, 담당자: 배정된 건, 요청자: 본인 건)
-  let query = supabase
+  // 요청 목록 쿼리 빌드
+  let requestsQuery = supabase
     .from('service_requests')
     .select(`
       *,
@@ -42,24 +42,29 @@ export default async function RequestsPage() {
   if (isAdmin) {
     // 모든 요청 노출
   } else if (isManagerOnly) {
-    query = query.eq('manager_id', user.id)
+    requestsQuery = requestsQuery.eq('manager_id', user.id)
   } else {
-    query = query.eq('requester_id', user.id)
+    requestsQuery = requestsQuery.eq('requester_id', user.id)
   }
 
-  const { data: requests } = await query
+  // 병렬로 쿼리 실행
+  const [requestsResult, conversationDraftsResult] = await Promise.all([
+    requestsQuery,
+    // 작성중인 대화(Conversations) 조회
+    supabase
+      .from('conversations')
+      .select('*')
+      .eq('user_id', user.id)
+      .is('request_id', null)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false }),
+  ])
 
-  // 작성중인 대화(Conversations) 조회 (본인이 시작한 대화 중 아직 요청으로 확정되지 않고 삭제되지 않은 건)
+  const requests = requestsResult.data
+  const conversationDrafts = conversationDraftsResult.data
+
+  // 작성중인 대화를 Request 형태로 변환
   let drafts: Request[] = []
-  
-  const { data: conversationDrafts } = await supabase
-    .from('conversations')
-    .select('*')
-    .eq('user_id', user.id)
-    .is('request_id', null)
-    .is('deleted_at', null) // 삭제된 대화 제외
-    .order('created_at', { ascending: false })
-  
   if (conversationDrafts) {
     drafts = conversationDrafts.map(d => ({
       id: d.id,
