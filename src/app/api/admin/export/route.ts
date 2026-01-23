@@ -20,7 +20,7 @@ interface RequestData {
   created_at: string
   updated_at: string
   requester: { full_name: string | null; email: string } | null
-  assignee: { full_name: string | null; email: string } | null
+  manager: { full_name: string | null; email: string } | null
   system: { name: string } | null
   category_lv1: { name: string } | null
   category_lv2: { name: string } | null
@@ -154,19 +154,23 @@ function formatDateTime(dateString: string): string {
 async function exportRequests(
   supabase: Awaited<ReturnType<typeof createClient>>
 ): Promise<ArrayBuffer> {
-  const { data: requests } = await supabase
+  const { data: requests, error } = await supabase
     .from('service_requests')
     .select(
       `
       *,
       requester:profiles!service_requests_requester_id_fkey(full_name, email),
-      assignee:profiles!service_requests_assignee_id_fkey(full_name, email),
+      manager:profiles!service_requests_manager_id_fkey(full_name, email),
       system:systems(name),
       category_lv1:request_categories_lv1(name),
       category_lv2:request_categories_lv2(name)
     `
     )
     .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('Export requests error:', error)
+  }
 
   const columns: ExportColumn<RequestData>[] = [
     { header: '상태', accessor: (r) => STATUS_LABELS[r.status] || r.status, width: 10 },
@@ -175,7 +179,7 @@ async function exportRequests(
     { header: 'SR 상세 구분', accessor: (r) => r.category_lv2?.name || '-', width: 15 },
     { header: '우선순위', accessor: (r) => PRIORITY_LABELS[r.priority] || r.priority, width: 10 },
     { header: '요청자', accessor: (r) => r.requester?.full_name || r.requester?.email || '-', width: 15 },
-    { header: '담당자', accessor: (r) => r.assignee?.full_name || r.assignee?.email || '-', width: 15 },
+    { header: '담당자', accessor: (r) => r.manager?.full_name || r.manager?.email || '-', width: 15 },
     { header: '시스템', accessor: (r) => r.system?.name || '-', width: 20 },
     { header: '생성일', accessor: (r) => formatDateTime(r.created_at), width: 18 },
     { header: '수정일', accessor: (r) => formatDateTime(r.updated_at), width: 18 },
