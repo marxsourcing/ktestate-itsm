@@ -100,7 +100,8 @@ export async function GET(request: NextRequest) {
         break
 
       case 'chats':
-        buffer = await exportChats(supabase, { status, userId, startDate, endDate })
+        const chatIds = ids ? ids.split(',').filter(Boolean) : undefined
+        buffer = await exportChats(supabase, { status, userId, startDate, endDate, ids: chatIds })
         filename = `채팅내역_${formatDateForFilename()}.xlsx`
         break
 
@@ -206,6 +207,7 @@ interface ChatFilters {
   userId?: string
   startDate?: string
   endDate?: string
+  ids?: string[]
 }
 
 // 메시지 내보내기용 플랫 데이터 타입
@@ -234,6 +236,11 @@ async function exportChats(
       )
     `
     )
+
+  // 특정 ID만 내보내기
+  if (filters?.ids && filters.ids.length > 0) {
+    query = query.in('id', filters.ids)
+  }
 
   // 필터 적용
   if (filters?.status) {
