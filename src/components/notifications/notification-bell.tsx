@@ -11,9 +11,11 @@ import {
   markAsRead,
   markAllAsRead,
   deleteNotification,
+  deleteReadNotifications,
   type NotificationData
 } from '@/app/notifications/actions'
 import Link from 'next/link'
+import { toast } from 'sonner'
 
 const typeIcons: Record<string, string> = {
   request_created: '📝',
@@ -156,6 +158,17 @@ export function NotificationBell() {
     }
   }
 
+  const handleDeleteReadNotifications = async () => {
+    const result = await deleteReadNotifications()
+    if (result.success) {
+      setNotifications(prev => prev.filter(n => !n.is_read))
+      toast.success(`읽은 알림 ${result.deletedCount}개가 삭제되었습니다.`)
+    }
+  }
+
+  // 읽은 알림 개수 계산
+  const readCount = notifications.filter(n => n.is_read).length
+
   const formatTime = (dateStr: string) => {
     const date = new Date(dateStr)
     const now = new Date()
@@ -194,16 +207,27 @@ export function NotificationBell() {
           {/* Header */}
           <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
             <h3 className="font-semibold text-gray-900">알림</h3>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
               {unreadCount > 0 && (
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={handleMarkAllAsRead}
-                  className="text-xs text-gray-500 hover:text-gray-700"
+                  className="text-xs text-gray-500 hover:text-gray-700 h-7 px-2"
                 >
-                  <CheckCheck className="size-4 mr-1" />
+                  <CheckCheck className="size-3.5 mr-1" />
                   모두 읽음
+                </Button>
+              )}
+              {readCount > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleDeleteReadNotifications}
+                  className="text-xs text-gray-500 hover:text-red-600 h-7 px-2"
+                >
+                  <Trash2 className="size-3.5 mr-1" />
+                  읽은 알림 삭제
                 </Button>
               )}
             </div>
@@ -314,18 +338,6 @@ export function NotificationBell() {
             )}
           </div>
 
-          {/* Footer */}
-          {notifications.length > 0 && (
-            <div className="border-t border-gray-100 px-4 py-2">
-              <Link
-                href="/notifications"
-                onClick={() => setIsOpen(false)}
-                className="block text-center text-sm text-rose-600 hover:text-rose-700 py-1"
-              >
-                전체 알림 보기
-              </Link>
-            </div>
-          )}
         </div>
       )}
     </div>
