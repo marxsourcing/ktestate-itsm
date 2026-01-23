@@ -134,7 +134,7 @@ export function ChatDetailModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[95vw] max-w-4xl h-[85vh] flex flex-col p-4 sm:p-6">
-        <DialogHeader className="flex-shrink-0 space-y-2 overflow-hidden">
+        <DialogHeader className="shrink-0 space-y-2 overflow-hidden">
           {/* 제목 + 버튼 영역 */}
           <div className="flex items-start justify-between gap-2">
             <DialogTitle className="text-base sm:text-lg leading-tight flex-1 min-w-0">
@@ -200,7 +200,7 @@ export function ChatDetailModal({
                   }`}
                 >
                   {message.role !== 'user' && (
-                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-rose-500 to-orange-400 flex items-center justify-center">
+                    <div className="shrink-0 w-8 h-8 rounded-full bg-linear-to-br from-rose-500 to-orange-400 flex items-center justify-center">
                       <Bot className="size-4 text-white" />
                     </div>
                   )}
@@ -244,7 +244,7 @@ export function ChatDetailModal({
                     )}
                   </div>
                   {message.role === 'user' && (
-                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center">
+                    <div className="shrink-0 w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center">
                       <User className="size-4 text-white" />
                     </div>
                   )}

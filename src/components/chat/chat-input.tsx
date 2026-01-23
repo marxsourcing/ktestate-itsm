@@ -44,6 +44,13 @@ export function ChatInput({
     }
   }, [message])
 
+  // AI 응답 완료 후 입력창에 포커스
+  useEffect(() => {
+    if (!isLoading && !disabled && textareaRef.current) {
+      textareaRef.current.focus()
+    }
+  }, [isLoading, disabled])
+
   // 파일 선택 처리
   const handleFileSelect = useCallback((files: FileList | null) => {
     if (!files) return
@@ -125,6 +132,11 @@ export function ChatInput({
         if (pf.preview) URL.revokeObjectURL(pf.preview)
       })
       setPendingFiles([])
+      
+      // 전송 후 입력창에 포커스 유지
+      setTimeout(() => {
+        textareaRef.current?.focus()
+      }, 0)
     } finally {
       setIsUploading(false)
     }
@@ -214,7 +226,11 @@ export function ChatInput({
             type="file"
             multiple
             accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv"
-            onChange={(e) => handleFileSelect(e.target.files)}
+            onChange={(e) => {
+              handleFileSelect(e.target.files)
+              // 파일 선택 후 input 초기화 (같은 파일 재선택 가능하도록)
+              e.target.value = ''
+            }}
             className="hidden"
           />
           <Button

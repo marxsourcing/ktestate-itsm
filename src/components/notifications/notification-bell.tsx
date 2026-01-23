@@ -239,7 +239,7 @@ export function NotificationBell() {
               <div className="p-4 space-y-3">
                 {[...Array(3)].map((_, i) => (
                   <div key={i} className="flex gap-3 animate-pulse">
-                    <div className="size-10 bg-gray-200 rounded-full flex-shrink-0"></div>
+                    <div className="size-10 bg-gray-200 rounded-full shrink-0"></div>
                     <div className="flex-1 space-y-2">
                       <div className="h-4 bg-gray-200 rounded w-3/4"></div>
                       <div className="h-3 bg-gray-200 rounded w-1/2"></div>
@@ -263,7 +263,7 @@ export function NotificationBell() {
                     )}
                   >
                     {/* Icon */}
-                    <div className="flex-shrink-0 text-xl">
+                    <div className="shrink-0 text-xl">
                       {typeIcons[notification.type] || '🔔'}
                     </div>
 
@@ -309,7 +309,7 @@ export function NotificationBell() {
                     </div>
 
                     {/* Actions */}
-                    <div className="flex-shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       {!notification.is_read && (
                         <button
                           onClick={() => handleMarkAsRead(notification.id)}

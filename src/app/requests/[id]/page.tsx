@@ -10,6 +10,7 @@ import {
   Clock,
   MessageCircle,
   MessageSquare,
+  Paperclip,
 } from 'lucide-react'
 import { HistoryTimeline } from './components/history-timeline'
 import { CommentsSection } from './components/comments-section'
@@ -114,7 +115,7 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
     return comment
   }))
 
-  // 대화 및 해당 대화의 첨부파일 조회
+  // 대화 조회 - 담당자/관리자도 볼 수 있도록 user_id 필터 제거
   const { data: conversation } = await supabase
     .from('conversations')
     .select('id, title, messages(*)')
@@ -124,7 +125,7 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
   let conversationAttachments: AttachmentData[] = []
 
   // 1. 요청 ID(request_id)로 직접 연결된 첨부파일 조회 (확정 시 업데이트된 파일들)
-  const { data: directAttachments } = await supabase
+  const { data: directAttachments, error: directAttError } = await supabase
     .from('attachments')
     .select('*')
     .eq('request_id', id)
@@ -137,6 +138,25 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
       .select('*')
       .eq('conversation_id', conversation.id)
     convAttachments = (attachmentsByConv as AttachmentData[]) || []
+  }
+
+  // 3. service_requests 테이블에서 conversation을 찾아 첨부파일 조회 (RLS 우회용)
+  // 만약 conversation이 없으면, conversations 테이블에서 request_id로 연결된 conversation_id를 찾음
+  if (!conversation && (directAttachments?.length === 0 || directAttError)) {
+    // 요청에 연결된 대화를 찾아서 첨부파일 조회
+    const { data: linkedConv } = await supabase
+      .from('conversations')
+      .select('id')
+      .eq('request_id', id)
+      .maybeSingle()
+    
+    if (linkedConv) {
+      const { data: linkedAttachments } = await supabase
+        .from('attachments')
+        .select('*')
+        .eq('conversation_id', linkedConv.id)
+      convAttachments = (linkedAttachments as AttachmentData[]) || []
+    }
   }
 
   // 중복 제거 및 병합
@@ -254,6 +274,42 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
                   </div>
                 </div>
               </div>
+
+              {/* 첨부파일 목록 */}
+              {conversationAttachments.length > 0 && (
+                <div className="mt-4 pt-3 border-t border-gray-100">
+                  <h4 className="text-[11px] text-gray-400 mb-2 flex items-center gap-1">
+                    <Paperclip className="size-3" />
+                    첨부파일 ({conversationAttachments.length})
+                  </h4>
+                  <div className="space-y-1.5">
+                    {conversationAttachments.map((att) => (
+                      <a
+                        key={att.id}
+                        href={att.url || '#'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 p-2 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors group"
+                      >
+                        {att.file_type?.startsWith('image/') ? (
+                          <div className="size-8 rounded overflow-hidden bg-gray-200 shrink-0">
+                            {att.url && (
+                              <img src={att.url} alt={att.file_name} className="size-full object-cover" />
+                            )}
+                          </div>
+                        ) : (
+                          <div className="size-8 rounded bg-gray-200 flex items-center justify-center shrink-0">
+                            <Paperclip className="size-4 text-gray-400" />
+                          </div>
+                        )}
+                        <span className="text-xs text-gray-600 truncate flex-1 group-hover:text-gray-900">
+                          {att.file_name}
+                        </span>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

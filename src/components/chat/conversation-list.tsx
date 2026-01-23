@@ -14,11 +14,15 @@ import {
   Clock, 
   CheckCircle, 
   Send, 
-  XCircle 
+  XCircle,
+  Pencil,
+  Check,
+  X
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
 import { createClient } from '@/lib/supabase/client'
-import { createConversation, deleteConversation } from '@/app/chat/actions'
+import { createConversation, deleteConversation, updateConversationTitle } from '@/app/chat/actions'
 
 interface Conversation {
   id: string
@@ -71,6 +75,8 @@ export function ConversationList() {
     completed: false,
     rejected: false,
   })
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingTitle, setEditingTitle] = useState('')
 
   const currentConversationId = pathname.split('/chat/')[1]
 
@@ -151,6 +157,37 @@ export function ConversationList() {
         router.push('/chat')
       }
     })
+  }
+
+  function handleStartEdit(e: React.MouseEvent, conv: Conversation) {
+    e.stopPropagation()
+    setEditingId(conv.id)
+    setEditingTitle(conv.title || '새 대화')
+  }
+
+  async function handleSaveTitle(e: React.MouseEvent | React.KeyboardEvent, conversationId: string) {
+    e.stopPropagation()
+    if (!editingTitle.trim()) return
+
+    const newTitle = editingTitle.trim()
+    
+    // 로컬 상태 즉시 업데이트
+    setConversations(prev => prev.map(conv => 
+      conv.id === conversationId ? { ...conv, title: newTitle } : conv
+    ))
+    setEditingId(null)
+    setEditingTitle('')
+
+    // 서버에 저장
+    startTransition(async () => {
+      await updateConversationTitle(conversationId, newTitle)
+    })
+  }
+
+  function handleCancelEdit(e: React.MouseEvent) {
+    e.stopPropagation()
+    setEditingId(null)
+    setEditingTitle('')
   }
 
   function formatDate(dateString: string) {
@@ -258,7 +295,7 @@ export function ConversationList() {
                       return (
                         <div
                           key={conv.id}
-                          onClick={() => router.push(`/chat/${conv.id}`)}
+                          onClick={() => editingId !== conv.id && router.push(`/chat/${conv.id}`)}
                           className={cn(
                             'group flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 transition-colors relative',
                             currentConversationId === conv.id
@@ -271,33 +308,78 @@ export function ConversationList() {
                             currentConversationId === conv.id ? "text-rose-500" : "text-gray-400"
                           )} />
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5 mb-0.5">
-                              <span className="truncate text-[13px] font-medium leading-tight">
-                                {conv.title || '새 대화'}
-                              </span>
-                              {statusTag && (
-                                <span className={cn(
-                                  "shrink-0 text-[9px] px-1 rounded font-bold leading-none py-0.5",
-                                  statusTag.color
-                                )}>
-                                  {statusTag.label}
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-[10px] text-gray-400">
-                                {formatDate(conv.updated_at)}
-                              </span>
-                            </div>
+                            {editingId === conv.id ? (
+                              <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                <Input
+                                  value={editingTitle}
+                                  onChange={(e) => setEditingTitle(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleSaveTitle(e, conv.id)
+                                    if (e.key === 'Escape') handleCancelEdit(e as any)
+                                  }}
+                                  className="h-6 text-xs py-0 px-1"
+                                  autoFocus
+                                />
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  className="h-5 w-5 text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50"
+                                  onClick={(e) => handleSaveTitle(e, conv.id)}
+                                >
+                                  <Check className="size-3" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  className="h-5 w-5 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                                  onClick={handleCancelEdit}
+                                >
+                                  <X className="size-3" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="flex items-center gap-1.5 mb-0.5">
+                                  <span className="truncate text-[13px] font-medium leading-tight">
+                                    {conv.title || '새 대화'}
+                                  </span>
+                                  {statusTag && (
+                                    <span className={cn(
+                                      "shrink-0 text-[9px] px-1 rounded font-bold leading-none py-0.5",
+                                      statusTag.color
+                                    )}>
+                                      {statusTag.label}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] text-gray-400">
+                                    {formatDate(conv.updated_at)}
+                                  </span>
+                                </div>
+                              </>
+                            )}
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 hover:bg-transparent h-6 w-6 shrink-0"
-                            onClick={(e) => handleDelete(e, conv.id)}
-                          >
-                            <Trash2 className="size-3.5" />
-                          </Button>
+                          {editingId !== conv.id && (
+                            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100">
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                className="text-gray-400 hover:text-blue-500 hover:bg-transparent h-6 w-6 shrink-0"
+                                onClick={(e) => handleStartEdit(e, conv)}
+                              >
+                                <Pencil className="size-3" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                className="text-gray-400 hover:text-red-500 hover:bg-transparent h-6 w-6 shrink-0"
+                                onClick={(e) => handleDelete(e, conv.id)}
+                              >
+                                <Trash2 className="size-3.5" />
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       )
                     })}

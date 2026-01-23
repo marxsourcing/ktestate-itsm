@@ -180,6 +180,8 @@ export async function POST(request: NextRequest) {
                   data: base64Data
                 }
               })
+            } else {
+              console.error('Failed to fetch image, status:', imageResponse.status)
             }
           } catch (error) {
             console.error('Failed to fetch image:', error)
