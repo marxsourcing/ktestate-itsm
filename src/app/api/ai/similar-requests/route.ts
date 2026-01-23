@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { generateEmbedding, prepareRequestText } from '@/lib/ai/embeddings'
 
 interface SimilarRequest {
   id: string
@@ -29,16 +30,41 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '제목 또는 설명이 필요합니다.' }, { status: 400 })
     }
 
-    // 검색어 구성
-    const searchText = `${title || ''} ${description || ''}`.trim()
-    const keywords = extractKeywords(searchText)
+    // 검색 텍스트 준비
+    const searchText = prepareRequestText(title || '', description || '', system)
 
-    if (keywords.length === 0) {
-      return NextResponse.json({ similarRequests: [] })
+    // 벡터 임베딩 생성
+    let queryEmbedding: number[]
+    try {
+      queryEmbedding = await generateEmbedding(searchText)
+    } catch (embeddingError) {
+      console.error('임베딩 생성 실패, 키워드 기반으로 폴백:', embeddingError)
+      // 임베딩 실패 시 키워드 기반 검색으로 폴백
+      return await fallbackKeywordSearch(supabase, title, description, system, excludeId)
     }
 
-    // 유사 요청 검색 쿼리 - 키워드 기반 검색
-    let query = supabase
+    // 벡터 유사도 검색 (pgvector 함수 사용)
+    const { data: vectorResults, error: vectorError } = await supabase.rpc(
+      'match_service_requests',
+      {
+        query_embedding: `[${queryEmbedding.join(',')}]`,
+        match_threshold: 0.3, // 30% 이상 유사도
+        match_count: 10,
+        exclude_id: excludeId || null
+      }
+    )
+
+    // 벡터 검색 결과가 없거나 에러 시 키워드 기반으로 폴백
+    if (vectorError || !vectorResults || vectorResults.length === 0) {
+      if (vectorError) {
+        console.error('벡터 검색 오류:', vectorError)
+      }
+      return await fallbackKeywordSearch(supabase, title, description, system, excludeId)
+    }
+
+    // 벡터 검색 결과에 추가 정보 조회
+    const requestIds = vectorResults.map((r: { id: string }) => r.id)
+    const { data: detailedRequests } = await supabase
       .from('service_requests')
       .select(`
         id,
@@ -50,65 +76,35 @@ export async function POST(request: NextRequest) {
         category_lv1:request_categories_lv1 (name),
         category_lv2:request_categories_lv2 (name)
       `)
-      .order('created_at', { ascending: false })
-      .limit(50)
+      .in('id', requestIds)
 
-    // 시스템 필터 (있는 경우)
-    if (system) {
-      const { data: systemData } = await supabase
-        .from('systems')
-        .select('id')
-        .or(`name.eq.${system},code.eq.${system},name.ilike.%${system}%`)
-        .maybeSingle()
+    // 결과 매핑
+    const similarRequests: SimilarRequest[] = vectorResults.map((vr: { id: string; similarity: number }) => {
+      const detail = detailedRequests?.find(d => d.id === vr.id)
+      if (!detail) return null
 
-      if (systemData) {
-        query = query.eq('system_id', systemData.id)
+      const systemData = detail.systems as { name: string } | null | { name: string }[]
+      const categoryLv1 = detail.category_lv1 as { name: string } | null | { name: string }[]
+      const categoryLv2 = detail.category_lv2 as { name: string } | null | { name: string }[]
+
+      return {
+        id: detail.id,
+        title: detail.title,
+        description: detail.description?.slice(0, 200) || '',
+        status: detail.status,
+        system_name: systemData
+          ? (Array.isArray(systemData) ? systemData[0]?.name : systemData?.name) || null
+          : null,
+        created_at: detail.created_at,
+        similarity: Math.round(vr.similarity * 100), // 0-1 → 0-100 변환
+        category_lv1_name: categoryLv1
+          ? (Array.isArray(categoryLv1) ? categoryLv1[0]?.name : categoryLv1?.name) || null
+          : null,
+        category_lv2_name: categoryLv2
+          ? (Array.isArray(categoryLv2) ? categoryLv2[0]?.name : categoryLv2?.name) || null
+          : null,
       }
-    }
-
-    const { data: requests, error } = await query
-
-    if (error) {
-      console.error('Similar requests query error:', error)
-      return NextResponse.json({ error: '검색 중 오류가 발생했습니다.' }, { status: 500 })
-    }
-
-    // 유사도 계산 및 필터링
-    const similarRequests: SimilarRequest[] = []
-
-    for (const req of requests || []) {
-      // 현재 요청 자체는 제외
-      if (excludeId && req.id === excludeId) {
-        continue
-      }
-
-      const reqText = `${req.title || ''} ${req.description || ''}`.toLowerCase()
-      const similarity = calculateSimilarity(keywords, reqText)
-
-      if (similarity >= 30) { // 30% 이상 유사도
-        const systemData = req.systems as { name: string } | null | { name: string }[]
-        const categoryLv1 = req.category_lv1 as { name: string } | null | { name: string }[]
-        const categoryLv2 = req.category_lv2 as { name: string } | null | { name: string }[]
-
-        similarRequests.push({
-          id: req.id,
-          title: req.title,
-          description: req.description?.slice(0, 200) || '',
-          status: req.status,
-          system_name: systemData
-            ? (Array.isArray(systemData) ? systemData[0]?.name : systemData?.name) || null
-            : null,
-          created_at: req.created_at,
-          similarity: Math.round(similarity),
-          category_lv1_name: categoryLv1
-            ? (Array.isArray(categoryLv1) ? categoryLv1[0]?.name : categoryLv1?.name) || null
-            : null,
-          category_lv2_name: categoryLv2
-            ? (Array.isArray(categoryLv2) ? categoryLv2[0]?.name : categoryLv2?.name) || null
-            : null,
-        })
-      }
-    }
+    }).filter(Boolean) as SimilarRequest[]
 
     // 유사도 순으로 정렬하고 상위 5개만 반환
     similarRequests.sort((a, b) => b.similarity - a.similarity)
@@ -120,13 +116,117 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       similarRequests: topSimilar,
       hasDuplicate,
-      duplicateWarning: hasDuplicate ? '매우 유사한 요청이 이미 존재합니다.' : null
+      duplicateWarning: hasDuplicate ? '매우 유사한 요청이 이미 존재합니다.' : null,
+      searchMethod: 'vector' // 검색 방식 표시
     })
 
   } catch (error) {
     console.error('Similar requests API error:', error)
     return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
   }
+}
+
+// 키워드 기반 검색 (폴백)
+async function fallbackKeywordSearch(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  title: string | undefined,
+  description: string | undefined,
+  system: string | undefined,
+  excludeId: string | undefined
+) {
+  const searchText = `${title || ''} ${description || ''}`.trim()
+  const keywords = extractKeywords(searchText)
+
+  if (keywords.length === 0) {
+    return NextResponse.json({ similarRequests: [], searchMethod: 'keyword' })
+  }
+
+  // 유사 요청 검색 쿼리 - 키워드 기반 검색
+  let query = supabase
+    .from('service_requests')
+    .select(`
+      id,
+      title,
+      description,
+      status,
+      created_at,
+      systems:system_id (name),
+      category_lv1:request_categories_lv1 (name),
+      category_lv2:request_categories_lv2 (name)
+    `)
+    .order('created_at', { ascending: false })
+    .limit(50)
+
+  // 시스템 필터 (있는 경우)
+  if (system) {
+    const { data: systemData } = await supabase
+      .from('systems')
+      .select('id')
+      .or(`name.eq.${system},code.eq.${system},name.ilike.%${system}%`)
+      .maybeSingle()
+
+    if (systemData) {
+      query = query.eq('system_id', systemData.id)
+    }
+  }
+
+  const { data: requests, error } = await query
+
+  if (error) {
+    console.error('Similar requests query error:', error)
+    return NextResponse.json({ error: '검색 중 오류가 발생했습니다.' }, { status: 500 })
+  }
+
+  // 유사도 계산 및 필터링
+  const similarRequests: SimilarRequest[] = []
+
+  for (const req of requests || []) {
+    // 현재 요청 자체는 제외
+    if (excludeId && req.id === excludeId) {
+      continue
+    }
+
+    const reqText = `${req.title || ''} ${req.description || ''}`.toLowerCase()
+    const similarity = calculateSimilarity(keywords, reqText)
+
+    if (similarity >= 30) { // 30% 이상 유사도
+      const systemData = req.systems as { name: string } | null | { name: string }[]
+      const categoryLv1 = req.category_lv1 as { name: string } | null | { name: string }[]
+      const categoryLv2 = req.category_lv2 as { name: string } | null | { name: string }[]
+
+      similarRequests.push({
+        id: req.id,
+        title: req.title,
+        description: req.description?.slice(0, 200) || '',
+        status: req.status,
+        system_name: systemData
+          ? (Array.isArray(systemData) ? systemData[0]?.name : systemData?.name) || null
+          : null,
+        created_at: req.created_at,
+        similarity: Math.round(similarity),
+        category_lv1_name: categoryLv1
+          ? (Array.isArray(categoryLv1) ? categoryLv1[0]?.name : categoryLv1?.name) || null
+          : null,
+        category_lv2_name: categoryLv2
+          ? (Array.isArray(categoryLv2) ? categoryLv2[0]?.name : categoryLv2?.name) || null
+          : null,
+      })
+    }
+  }
+
+  // 유사도 순으로 정렬하고 상위 5개만 반환
+  similarRequests.sort((a, b) => b.similarity - a.similarity)
+  const topSimilar = similarRequests.slice(0, 5)
+
+  // 80% 이상 유사도 = 중복 가능성 높음
+  const hasDuplicate = topSimilar.some(r => r.similarity >= 80)
+
+  return NextResponse.json({
+    similarRequests: topSimilar,
+    hasDuplicate,
+    duplicateWarning: hasDuplicate ? '매우 유사한 요청이 이미 존재합니다.' : null,
+    searchMethod: 'keyword' // 폴백 검색 방식 표시
+  })
 }
 
 // 키워드 추출 (불용어 제거)
