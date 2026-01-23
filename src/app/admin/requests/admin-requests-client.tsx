@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Table,
   TableBody,
@@ -46,6 +47,7 @@ export function AdminRequestsClient({ requests }: AdminRequestsClientProps) {
   const [searchTerm, setSearchTerm] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [isExporting, setIsExporting] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   const filteredRequests = requests.filter((req) => {
     const searchLower = searchTerm.toLowerCase()
@@ -61,15 +63,69 @@ export function AdminRequestsClient({ requests }: AdminRequestsClientProps) {
   const startIndex = (currentPage - 1) * PAGE_SIZE
   const paginatedRequests = filteredRequests.slice(startIndex, startIndex + PAGE_SIZE)
 
+  // 현재 페이지의 모든 항목이 선택되었는지 확인
+  const isAllCurrentPageSelected = paginatedRequests.length > 0 && 
+    paginatedRequests.every((req) => selectedIds.has(req.id))
+  
+  // 필터링된 전체 항목이 선택되었는지 확인
+  const isAllFilteredSelected = filteredRequests.length > 0 && 
+    filteredRequests.every((req) => selectedIds.has(req.id))
+
   function handleSearchChange(value: string) {
     setSearchTerm(value)
     setCurrentPage(1)
+    setSelectedIds(new Set()) // 검색 변경 시 선택 초기화
+  }
+
+  function handleSelectAll(checked: boolean) {
+    if (checked) {
+      // 현재 페이지의 모든 항목 선택
+      const newSelected = new Set(selectedIds)
+      paginatedRequests.forEach((req) => newSelected.add(req.id))
+      setSelectedIds(newSelected)
+    } else {
+      // 현재 페이지의 모든 항목 선택 해제
+      const newSelected = new Set(selectedIds)
+      paginatedRequests.forEach((req) => newSelected.delete(req.id))
+      setSelectedIds(newSelected)
+    }
+  }
+
+  function handleSelectAllFiltered() {
+    // 필터링된 전체 항목 선택
+    const newSelected = new Set<string>()
+    filteredRequests.forEach((req) => newSelected.add(req.id))
+    setSelectedIds(newSelected)
+  }
+
+  function handleSelectOne(id: string, checked: boolean) {
+    const newSelected = new Set(selectedIds)
+    if (checked) {
+      newSelected.add(id)
+    } else {
+      newSelected.delete(id)
+    }
+    setSelectedIds(newSelected)
+  }
+
+  function handleClearSelection() {
+    setSelectedIds(new Set())
   }
 
   async function handleExport() {
     setIsExporting(true)
     try {
-      const response = await fetch('/api/admin/export?type=requests')
+      // 선택된 항목이 있으면 선택된 항목만, 없으면 필터링된 전체 목록 내보내기
+      const idsToExport = selectedIds.size > 0 
+        ? Array.from(selectedIds) 
+        : filteredRequests.map((req) => req.id)
+      
+      const params = new URLSearchParams({ type: 'requests' })
+      if (idsToExport.length < filteredRequests.length || selectedIds.size > 0) {
+        params.set('ids', idsToExport.join(','))
+      }
+      
+      const response = await fetch(`/api/admin/export?${params.toString()}`)
       if (!response.ok) throw new Error('Export failed')
 
       const blob = await response.blob()
@@ -120,27 +176,66 @@ export function AdminRequestsClient({ requests }: AdminRequestsClientProps) {
         </div>
         <div className="text-sm text-gray-500">
           총 {filteredRequests.length}건
+          {selectedIds.size > 0 && (
+            <span className="ml-2 text-blue-600 font-medium">
+              ({selectedIds.size}건 선택됨)
+            </span>
+          )}
         </div>
+        {selectedIds.size > 0 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleClearSelection}
+            className="text-gray-500"
+          >
+            선택 해제
+          </Button>
+        )}
         <Button
           variant="outline"
           size="sm"
           onClick={handleExport}
-          disabled={isExporting || requests.length === 0}
+          disabled={isExporting || filteredRequests.length === 0}
         >
           {isExporting ? (
             <Loader2 className="size-4 animate-spin mr-2" />
           ) : (
             <Download className="size-4 mr-2" />
           )}
-          Excel 내보내기
+          {selectedIds.size > 0 
+            ? `선택 항목 내보내기 (${selectedIds.size}건)` 
+            : `Excel 내보내기 (${filteredRequests.length}건)`}
         </Button>
       </div>
+
+      {/* 전체 선택 안내 */}
+      {selectedIds.size > 0 && !isAllFilteredSelected && (
+        <div className="flex items-center gap-2 text-sm bg-blue-50 text-blue-700 px-4 py-2 rounded-md">
+          <span>현재 {selectedIds.size}건이 선택되었습니다.</span>
+          <Button
+            variant="link"
+            size="sm"
+            onClick={handleSelectAllFiltered}
+            className="text-blue-700 h-auto p-0 underline"
+          >
+            필터링된 전체 {filteredRequests.length}건 모두 선택
+          </Button>
+        </div>
+      )}
 
       {/* Table */}
       <div className="rounded-md border bg-white">
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-[50px]">
+                <Checkbox
+                  checked={isAllCurrentPageSelected}
+                  onCheckedChange={handleSelectAll}
+                  aria-label="현재 페이지 전체 선택"
+                />
+              </TableHead>
               <TableHead className="w-[100px]">상태</TableHead>
               <TableHead>제목</TableHead>
               <TableHead>요청자</TableHead>
@@ -153,7 +248,17 @@ export function AdminRequestsClient({ requests }: AdminRequestsClientProps) {
           <TableBody>
             {paginatedRequests.length > 0 ? (
               paginatedRequests.map((request) => (
-                <TableRow key={request.id}>
+                <TableRow 
+                  key={request.id}
+                  className={selectedIds.has(request.id) ? 'bg-blue-50' : ''}
+                >
+                  <TableCell>
+                    <Checkbox
+                      checked={selectedIds.has(request.id)}
+                      onCheckedChange={(checked) => handleSelectOne(request.id, checked as boolean)}
+                      aria-label={`${request.title} 선택`}
+                    />
+                  </TableCell>
                   <TableCell>
                     {getStatusBadge(request.status)}
                   </TableCell>
@@ -189,7 +294,7 @@ export function AdminRequestsClient({ requests }: AdminRequestsClientProps) {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={7} className="h-24 text-center text-gray-500">
+                <TableCell colSpan={8} className="h-24 text-center text-gray-500">
                   {searchTerm ? '검색 결과가 없습니다.' : '서비스 요청이 없습니다.'}
                 </TableCell>
               </TableRow>

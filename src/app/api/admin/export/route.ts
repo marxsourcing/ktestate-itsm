@@ -80,6 +80,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const exportType = searchParams.get('type') // 'requests' | 'chats' | 'messages'
   const conversationId = searchParams.get('conversationId')
+  const ids = searchParams.get('ids') // 선택된 ID 목록 (콤마 구분)
 
   // 채팅 필터 파라미터
   const status = searchParams.get('status') || undefined
@@ -93,7 +94,8 @@ export async function GET(request: NextRequest) {
 
     switch (exportType) {
       case 'requests':
-        buffer = await exportRequests(supabase)
+        const requestIds = ids ? ids.split(',').filter(Boolean) : undefined
+        buffer = await exportRequests(supabase, requestIds)
         filename = `서비스요청_${formatDateForFilename()}.xlsx`
         break
 
@@ -152,9 +154,10 @@ function formatDateTime(dateString: string): string {
 }
 
 async function exportRequests(
-  supabase: Awaited<ReturnType<typeof createClient>>
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  ids?: string[]
 ): Promise<ArrayBuffer> {
-  const { data: requests, error } = await supabase
+  let query = supabase
     .from('service_requests')
     .select(
       `
@@ -166,7 +169,13 @@ async function exportRequests(
       category_lv2:request_categories_lv2(name)
     `
     )
-    .order('created_at', { ascending: false })
+
+  // 특정 ID만 내보내기
+  if (ids && ids.length > 0) {
+    query = query.in('id', ids)
+  }
+
+  const { data: requests, error } = await query.order('created_at', { ascending: false })
 
   if (error) {
     console.error('Export requests error:', error)
