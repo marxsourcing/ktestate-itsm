@@ -48,15 +48,19 @@ export function TopSystems() {
     )
   }
 
+  // 데이터 개수에 따라 높이 동적 조정 (최소 400px, 항목당 45px)
+  const chartHeight = Math.max(400, data.length * 45)
+
   return (
     <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
       <h3 className="text-lg font-semibold text-gray-900 mb-4">시스템별 현황 (Top 10)</h3>
-      <div className="h-80">
+      <div style={{ height: chartHeight }}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart 
             data={data} 
             layout="vertical"
             margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+            barCategoryGap="20%"
           >
             <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#e5e7eb" />
             <XAxis 
@@ -69,10 +73,10 @@ export function TopSystems() {
             <YAxis
               type="category"
               dataKey="system_name"
-              tick={{ fontSize: 11, fill: '#6b7280' }}
+              tick={{ fontSize: 12, fill: '#374151' }}
               tickLine={false}
               axisLine={false}
-              width={120}
+              width={140}
             />
             <Tooltip 
               contentStyle={{ 
@@ -101,8 +105,8 @@ export function TopSystems() {
                 return <span className="text-gray-600 text-sm">{labels[value] || value}</span>
               }}
             />
-            <Bar dataKey="pending" name="pending" fill="#f59e0b" radius={[0, 4, 4, 0]} />
-            <Bar dataKey="completed" name="completed" fill="#10b981" radius={[0, 4, 4, 0]} />
+            <Bar dataKey="pending" name="pending" fill="#f59e0b" radius={[0, 4, 4, 0]} barSize={16} />
+            <Bar dataKey="completed" name="completed" fill="#10b981" radius={[0, 4, 4, 0]} barSize={16} />
           </BarChart>
         </ResponsiveContainer>
       </div>
