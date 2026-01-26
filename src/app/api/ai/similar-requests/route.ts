@@ -62,49 +62,30 @@ export async function POST(request: NextRequest) {
       return await fallbackKeywordSearch(supabase, title, description, system, excludeId)
     }
 
-    // 벡터 검색 결과에 추가 정보 조회
-    const requestIds = vectorResults.map((r: { id: string }) => r.id)
-    const { data: detailedRequests } = await supabase
-      .from('service_requests')
-      .select(`
-        id,
-        title,
-        description,
-        status,
-        created_at,
-        systems:system_id (name),
-        category_lv1:request_categories_lv1 (name),
-        category_lv2:request_categories_lv2 (name)
-      `)
-      .in('id', requestIds)
+    // 벡터 검색 결과 직접 사용 (함수에서 조인된 정보 반환)
+    interface VectorResult {
+      id: string
+      title: string
+      description: string | null
+      status: string
+      system_name: string | null
+      category_lv1_name: string | null
+      category_lv2_name: string | null
+      created_at: string
+      similarity: number
+    }
 
-    // 결과 매핑
-    const similarRequests: SimilarRequest[] = vectorResults.map((vr: { id: string; similarity: number }) => {
-      const detail = detailedRequests?.find(d => d.id === vr.id)
-      if (!detail) return null
-
-      const systemData = detail.systems as { name: string } | null | { name: string }[]
-      const categoryLv1 = detail.category_lv1 as { name: string } | null | { name: string }[]
-      const categoryLv2 = detail.category_lv2 as { name: string } | null | { name: string }[]
-
-      return {
-        id: detail.id,
-        title: detail.title,
-        description: detail.description?.slice(0, 200) || '',
-        status: detail.status,
-        system_name: systemData
-          ? (Array.isArray(systemData) ? systemData[0]?.name : systemData?.name) || null
-          : null,
-        created_at: detail.created_at,
-        similarity: Math.round(vr.similarity * 100), // 0-1 → 0-100 변환
-        category_lv1_name: categoryLv1
-          ? (Array.isArray(categoryLv1) ? categoryLv1[0]?.name : categoryLv1?.name) || null
-          : null,
-        category_lv2_name: categoryLv2
-          ? (Array.isArray(categoryLv2) ? categoryLv2[0]?.name : categoryLv2?.name) || null
-          : null,
-      }
-    }).filter(Boolean) as SimilarRequest[]
+    const similarRequests: SimilarRequest[] = vectorResults.map((vr: VectorResult) => ({
+      id: vr.id,
+      title: vr.title,
+      description: vr.description?.slice(0, 200) || '',
+      status: vr.status,
+      system_name: vr.system_name || null,
+      created_at: vr.created_at,
+      similarity: Math.round(vr.similarity * 100), // 0-1 → 0-100 변환
+      category_lv1_name: vr.category_lv1_name || null,
+      category_lv2_name: vr.category_lv2_name || null,
+    }))
 
     // 유사도 순으로 정렬하고 상위 5개만 반환
     similarRequests.sort((a, b) => b.similarity - a.similarity)
@@ -141,23 +122,8 @@ async function fallbackKeywordSearch(
     return NextResponse.json({ similarRequests: [], searchMethod: 'keyword' })
   }
 
-  // 유사 요청 검색 쿼리 - 키워드 기반 검색
-  let query = supabase
-    .from('service_requests')
-    .select(`
-      id,
-      title,
-      description,
-      status,
-      created_at,
-      systems:system_id (name),
-      category_lv1:request_categories_lv1 (name),
-      category_lv2:request_categories_lv2 (name)
-    `)
-    .order('created_at', { ascending: false })
-    .limit(50)
-
-  // 시스템 필터 (있는 경우)
+  // 시스템 ID 조회 (있는 경우)
+  let systemId: string | null = null
   if (system) {
     const { data: systemData } = await supabase
       .from('systems')
@@ -166,11 +132,19 @@ async function fallbackKeywordSearch(
       .maybeSingle()
 
     if (systemData) {
-      query = query.eq('system_id', systemData.id)
+      systemId = systemData.id
     }
   }
 
-  const { data: requests, error } = await query
+  // SECURITY DEFINER 함수를 사용하여 RLS 우회
+  const { data: requests, error } = await supabase.rpc(
+    'search_service_requests_for_similarity',
+    {
+      search_system_id: systemId,
+      exclude_id: excludeId || null,
+      result_limit: 50
+    }
+  )
 
   if (error) {
     console.error('Similar requests query error:', error)
@@ -178,38 +152,34 @@ async function fallbackKeywordSearch(
   }
 
   // 유사도 계산 및 필터링
+  interface KeywordResult {
+    id: string
+    title: string
+    description: string | null
+    status: string
+    system_name: string | null
+    category_lv1_name: string | null
+    category_lv2_name: string | null
+    created_at: string
+  }
+
   const similarRequests: SimilarRequest[] = []
 
-  for (const req of requests || []) {
-    // 현재 요청 자체는 제외
-    if (excludeId && req.id === excludeId) {
-      continue
-    }
-
+  for (const req of (requests as KeywordResult[]) || []) {
     const reqText = `${req.title || ''} ${req.description || ''}`.toLowerCase()
     const similarity = calculateSimilarity(keywords, reqText)
 
     if (similarity >= 30) { // 30% 이상 유사도
-      const systemData = req.systems as { name: string } | null | { name: string }[]
-      const categoryLv1 = req.category_lv1 as { name: string } | null | { name: string }[]
-      const categoryLv2 = req.category_lv2 as { name: string } | null | { name: string }[]
-
       similarRequests.push({
         id: req.id,
         title: req.title,
         description: req.description?.slice(0, 200) || '',
         status: req.status,
-        system_name: systemData
-          ? (Array.isArray(systemData) ? systemData[0]?.name : systemData?.name) || null
-          : null,
+        system_name: req.system_name || null,
         created_at: req.created_at,
         similarity: Math.round(similarity),
-        category_lv1_name: categoryLv1
-          ? (Array.isArray(categoryLv1) ? categoryLv1[0]?.name : categoryLv1?.name) || null
-          : null,
-        category_lv2_name: categoryLv2
-          ? (Array.isArray(categoryLv2) ? categoryLv2[0]?.name : categoryLv2?.name) || null
-          : null,
+        category_lv1_name: req.category_lv1_name || null,
+        category_lv2_name: req.category_lv2_name || null,
       })
     }
   }
