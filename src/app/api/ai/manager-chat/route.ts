@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { searchRagDocuments, RagSearchResult } from '@/lib/ai/rag'
 
 const MANAGER_SYSTEM_PROMPT = `당신은 KT Estate의 IT 서비스 담당자를 위한 AI 협업 어시스턴트입니다.
 
@@ -120,13 +121,39 @@ export async function POST(request: NextRequest) {
 - 요청 내용: ${requestContext.description}`
     }
 
-    // 유사 사례 검색 요청인 경우 실제 DB에서 유사 사례 조회
+    // 유사 사례 검색 요청인 경우 RAG 문서에서 조회
     const lowerMessage = message.toLowerCase()
     let similarCasesData = ''
+    let ragSources: { id: string; title: string; similarity: number; requestId: string | null }[] = []
+    
     if (lowerMessage.includes('유사') || lowerMessage.includes('사례') || lowerMessage.includes('과거')) {
-      const similarCases = await searchSimilarCases(supabase, requestContext?.title || '', requestContext?.description || '', requestContext?.systemName)
-      if (similarCases.length > 0) {
-        similarCasesData = `\n\n[실제 유사 사례 데이터]\n${similarCases.map((c, i) => `
+      // RAG 벡터 검색으로 유사 사례 조회
+      const ragResults = await searchRagSimilarCases(
+        supabase,
+        requestContext?.title || '',
+        requestContext?.description || '',
+        requestContext?.systemName
+      )
+      
+      if (ragResults.results.length > 0) {
+        similarCasesData = `\n\n[실제 유사 사례 데이터 - RAG 검색 결과]\n${ragResults.results.map((c, i) => `
+사례 ${i + 1} (유사도 ${c.similarity}%):
+- 제목: ${c.title}
+- 시스템: ${c.systemName || '미지정'}
+- 처리 내용:
+${c.content}`).join('\n---\n')}`
+        contextPrompt += similarCasesData
+        ragSources = ragResults.sources
+      } else {
+        // RAG 결과 없으면 키워드 기반 폴백
+        const fallbackCases = await searchSimilarCasesFallback(
+          supabase,
+          requestContext?.title || '',
+          requestContext?.description || '',
+          requestContext?.systemName
+        )
+        if (fallbackCases.length > 0) {
+          similarCasesData = `\n\n[실제 유사 사례 데이터]\n${fallbackCases.map((c, i) => `
 사례 ${i + 1} (유사도 ${c.similarity}%):
 - 제목: ${c.title}
 - 상태: ${c.status}
@@ -134,7 +161,8 @@ export async function POST(request: NextRequest) {
 - 요청 내용: ${c.description?.slice(0, 200) || '내용 없음'}
 - 처리일: ${c.created_at}
 ${c.comments ? `- 처리 답변: ${c.comments}` : ''}`).join('\n')}`
-        contextPrompt += similarCasesData
+          contextPrompt += similarCasesData
+        }
       }
     }
 
@@ -183,7 +211,8 @@ ${c.comments ? `- 처리 답변: ${c.comments}` : ''}`).join('\n')}`
 
     return NextResponse.json({
       content: aiContent,
-      conversationId: conversation.id
+      conversationId: conversation.id,
+      sources: ragSources.length > 0 ? ragSources : undefined
     })
 
   } catch (error) {
@@ -247,9 +276,71 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// 유사 사례 검색 함수
+// RAG 기반 유사 사례 검색 함수
+async function searchRagSimilarCases(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  title: string,
+  description: string,
+  systemName?: string
+): Promise<{
+  results: { title: string; similarity: number; systemName: string | null; content: string }[]
+  sources: { id: string; title: string; similarity: number; requestId: string | null }[]
+}> {
+  try {
+    const searchText = `${title} ${description}`.trim()
+    if (!searchText) {
+      return { results: [], sources: [] }
+    }
+
+    // 시스템 ID 조회
+    let systemId: string | null = null
+    if (systemName) {
+      const { data: systemData } = await supabase
+        .from('systems')
+        .select('id')
+        .or(`name.eq.${systemName},code.eq.${systemName},name.ilike.%${systemName}%`)
+        .maybeSingle()
+      if (systemData) {
+        systemId = systemData.id
+      }
+    }
+
+    // RAG 문서 벡터 검색
+    const ragResults: RagSearchResult[] = await searchRagDocuments(supabase, searchText, {
+      systemId,
+      documentType: 'completion',
+      matchThreshold: 0.3,
+      matchCount: 5,
+    })
+
+    if (ragResults.length === 0) {
+      return { results: [], sources: [] }
+    }
+
+    const results = ragResults.map(doc => ({
+      title: doc.title,
+      similarity: Math.round(doc.similarity * 100),
+      systemName: doc.system_name,
+      content: doc.content,
+    }))
+
+    const sources = ragResults.map(doc => ({
+      id: doc.id,
+      title: doc.title,
+      similarity: Math.round(doc.similarity * 100),
+      requestId: doc.request_id,
+    }))
+
+    return { results, sources }
+  } catch (error) {
+    console.error('RAG 유사 사례 검색 오류:', error)
+    return { results: [], sources: [] }
+  }
+}
+
+// 키워드 기반 유사 사례 검색 함수 (폴백)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function searchSimilarCases(supabase: any, title: string, description: string, systemName?: string) {
+async function searchSimilarCasesFallback(supabase: any, title: string, description: string, systemName?: string) {
   try {
     const searchText = `${title} ${description}`.trim()
     const keywords = extractKeywords(searchText)

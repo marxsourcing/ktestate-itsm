@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { generateEmbedding, prepareRequestText } from '@/lib/ai/embeddings'
+import { searchRagDocuments } from '@/lib/ai/rag'
 
 interface SimilarRequest {
   id: string
@@ -12,6 +13,7 @@ interface SimilarRequest {
   similarity: number
   category_lv1_name?: string | null
   category_lv2_name?: string | null
+  hasAnswer?: boolean  // RAG 문서에서 온 경우 처리 답변 있음
 }
 
 export async function POST(request: NextRequest) {
@@ -33,22 +35,112 @@ export async function POST(request: NextRequest) {
     // 검색 텍스트 준비
     const searchText = prepareRequestText(title || '', description || '', system)
 
-    // 벡터 임베딩 생성
+    // 시스템 ID 조회 (있는 경우)
+    let systemId: string | null = null
+    if (system) {
+      const { data: systemData } = await supabase
+        .from('systems')
+        .select('id')
+        .or(`name.eq.${system},code.eq.${system},name.ilike.%${system}%`)
+        .maybeSingle()
+      if (systemData) {
+        systemId = systemData.id
+      }
+    }
+
+    // 1단계: RAG 문서 벡터 검색 (완료된 요청의 처리 결과 포함)
+    try {
+      const ragResults = await searchRagDocuments(supabase, searchText, {
+        systemId,
+        documentType: 'completion',
+        matchThreshold: 0.3,
+        matchCount: 10,
+      })
+
+      if (ragResults.length > 0) {
+        // RAG 결과가 있으면 해당 request 정보로 변환
+        const ragRequestIds = ragResults
+          .filter(r => r.request_id)
+          .map(r => r.request_id as string)
+
+        if (ragRequestIds.length > 0) {
+          // excludeId 필터링
+          const filteredIds = excludeId 
+            ? ragRequestIds.filter(id => id !== excludeId)
+            : ragRequestIds
+
+          if (filteredIds.length > 0) {
+            // 요청 상세 정보 조회
+            const { data: requests } = await supabase
+              .from('service_requests')
+              .select(`
+                id, title, description, status, created_at,
+                system:systems(name),
+                category_lv1:request_categories_lv1(name),
+                category_lv2:request_categories_lv2(name)
+              `)
+              .in('id', filteredIds)
+
+            if (requests && requests.length > 0) {
+              const similarRequests: SimilarRequest[] = requests.map(req => {
+                const ragDoc = ragResults.find(r => r.request_id === req.id)
+                const systemName = Array.isArray(req.system)
+                  ? req.system[0]?.name
+                  : (req.system as { name: string } | null)?.name
+                const catLv1 = Array.isArray(req.category_lv1)
+                  ? req.category_lv1[0]?.name
+                  : (req.category_lv1 as { name: string } | null)?.name
+                const catLv2 = Array.isArray(req.category_lv2)
+                  ? req.category_lv2[0]?.name
+                  : (req.category_lv2 as { name: string } | null)?.name
+
+                return {
+                  id: req.id,
+                  title: req.title,
+                  description: req.description?.slice(0, 200) || '',
+                  status: req.status,
+                  system_name: systemName || null,
+                  created_at: req.created_at,
+                  similarity: Math.round((ragDoc?.similarity || 0) * 100),
+                  category_lv1_name: catLv1 || null,
+                  category_lv2_name: catLv2 || null,
+                  hasAnswer: true, // RAG 문서 = 처리 답변 있음
+                }
+              })
+
+              // 유사도 순 정렬
+              similarRequests.sort((a, b) => b.similarity - a.similarity)
+              const topSimilar = similarRequests.slice(0, 5)
+              const hasDuplicate = topSimilar.some(r => r.similarity >= 80)
+
+              return NextResponse.json({
+                similarRequests: topSimilar,
+                hasDuplicate,
+                duplicateWarning: hasDuplicate ? '매우 유사한 요청이 이미 존재합니다.' : null,
+                searchMethod: 'rag'
+              })
+            }
+          }
+        }
+      }
+    } catch (ragError) {
+      console.error('RAG 검색 실패, 벡터 검색으로 폴백:', ragError)
+    }
+
+    // 2단계: 기존 service_requests 벡터 검색 (폴백)
     let queryEmbedding: number[]
     try {
       queryEmbedding = await generateEmbedding(searchText)
     } catch (embeddingError) {
       console.error('임베딩 생성 실패, 키워드 기반으로 폴백:', embeddingError)
-      // 임베딩 실패 시 키워드 기반 검색으로 폴백
       return await fallbackKeywordSearch(supabase, title, description, system, excludeId)
     }
 
-    // 벡터 유사도 검색 (pgvector 함수 사용)
     const { data: vectorResults, error: vectorError } = await supabase.rpc(
       'match_service_requests',
       {
         query_embedding: `[${queryEmbedding.join(',')}]`,
-        match_threshold: 0.3, // 30% 이상 유사도
+        match_threshold: 0.3,
         match_count: 10,
         exclude_id: excludeId || null
       }
@@ -62,7 +154,7 @@ export async function POST(request: NextRequest) {
       return await fallbackKeywordSearch(supabase, title, description, system, excludeId)
     }
 
-    // 벡터 검색 결과 직접 사용 (함수에서 조인된 정보 반환)
+    // 벡터 검색 결과 직접 사용
     interface VectorResult {
       id: string
       title: string
@@ -82,23 +174,21 @@ export async function POST(request: NextRequest) {
       status: vr.status,
       system_name: vr.system_name || null,
       created_at: vr.created_at,
-      similarity: Math.round(vr.similarity * 100), // 0-1 → 0-100 변환
+      similarity: Math.round(vr.similarity * 100),
       category_lv1_name: vr.category_lv1_name || null,
       category_lv2_name: vr.category_lv2_name || null,
+      hasAnswer: vr.status === 'completed', // 완료된 경우만 답변 있을 수 있음
     }))
 
-    // 유사도 순으로 정렬하고 상위 5개만 반환
     similarRequests.sort((a, b) => b.similarity - a.similarity)
     const topSimilar = similarRequests.slice(0, 5)
-
-    // 80% 이상 유사도 = 중복 가능성 높음
     const hasDuplicate = topSimilar.some(r => r.similarity >= 80)
 
     return NextResponse.json({
       similarRequests: topSimilar,
       hasDuplicate,
       duplicateWarning: hasDuplicate ? '매우 유사한 요청이 이미 존재합니다.' : null,
-      searchMethod: 'vector' // 검색 방식 표시
+      searchMethod: 'vector'
     })
 
   } catch (error) {

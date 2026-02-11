@@ -12,14 +12,25 @@ import {
   FileSearch,
   FileText,
   ClipboardList,
-  AlertTriangle
+  AlertTriangle,
+  ExternalLink,
+  BookOpen
 } from 'lucide-react'
+import Link from 'next/link'
+
+interface SourceInfo {
+  id: string
+  title: string
+  similarity: number
+  requestId: string | null
+}
 
 interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   content: string
   created_at: string
+  sources?: SourceInfo[]
 }
 
 interface RequestContext {
@@ -126,7 +137,8 @@ export function ManagerAiChat({ requestId, requestContext, onChatHistoryChange }
         id: `ai-${Date.now()}`,
         role: 'assistant',
         content: data.content,
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        sources: data.sources || undefined
       }
 
       setMessages(prev => [...prev, aiMessage])
@@ -236,6 +248,42 @@ export function ManagerAiChat({ requestId, requestContext, onChatHistoryChange }
                   )}
                 >
                   <div className="text-sm whitespace-pre-wrap">{message.content}</div>
+                  
+                  {/* 출처 정보 표시 (RAG 검색 결과) */}
+                  {message.role === 'assistant' && message.sources && message.sources.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-gray-100">
+                      <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-2">
+                        <BookOpen className="size-3" />
+                        <span>참조된 과거 처리 사례</span>
+                      </div>
+                      <div className="space-y-1.5">
+                        {message.sources.slice(0, 3).map((source) => (
+                          <div
+                            key={source.id}
+                            className="flex items-center justify-between gap-2 text-xs bg-gray-50 rounded-md px-2 py-1.5"
+                          >
+                            <span className="text-gray-700 truncate flex-1">
+                              {source.title}
+                            </span>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <span className="text-indigo-600 font-medium">
+                                {source.similarity}%
+                              </span>
+                              {source.requestId && (
+                                <Link
+                                  href={`/workspace/${source.requestId}`}
+                                  className="text-gray-400 hover:text-indigo-600 transition-colors"
+                                  title="원본 요청 보기"
+                                >
+                                  <ExternalLink className="size-3" />
+                                </Link>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
                 {message.role === 'user' && (
                   <div className="flex size-8 flex-shrink-0 items-center justify-center rounded-lg bg-gray-200">

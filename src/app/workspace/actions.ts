@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { generateRagDocument, updateRagDocument, updateRequestEmbedding } from '@/lib/ai/rag'
 
 // 요청을 담당자에게 배정
 export async function assignRequest(requestId: string, managerId: string) {
@@ -220,6 +221,16 @@ export async function updateRequestStatusWithReason(
   if (updateError) {
     console.error('상태 변경 오류:', updateError)
     return { error: '상태 변경 중 오류가 발생했습니다.' }
+  }
+
+  // 완료 시 RAG 문서 생성 (비동기, non-blocking)
+  if (newStatus === 'completed' && reason.trim()) {
+    try {
+      await generateRagDocument(supabase, requestId, reason)
+    } catch (ragError) {
+      console.error('RAG 문서 생성 오류:', ragError)
+      // RAG 실패해도 완료 처리는 유지
+    }
   }
 
   // 히스토리 기록
@@ -638,7 +649,7 @@ export async function updateRequestDetails(
   const { data: currentRequest } = await supabase
     .from('service_requests')
     .select(`
-      manager_id, system_id, module_id, category_lv1_id, category_lv2_id, priority,
+      manager_id, status, system_id, module_id, category_lv1_id, category_lv2_id, priority,
       system:systems(name),
       module:system_modules(name),
       category_lv1:request_categories_lv1(name),
@@ -703,6 +714,26 @@ export async function updateRequestDetails(
   if (error) {
     console.error('요청 정보 수정 오류:', error)
     return { error: '요청 정보 수정 중 오류가 발생했습니다.' }
+  }
+
+  // 시스템/모듈 변경 시 임베딩 갱신 (비동기, non-blocking)
+  const systemOrModuleChanged = 
+    data.system_id !== undefined && data.system_id !== currentRequest.system_id ||
+    data.module_id !== undefined && data.module_id !== currentRequest.module_id
+
+  if (systemOrModuleChanged) {
+    try {
+      // 요청 임베딩 갱신
+      await updateRequestEmbedding(supabase, requestId)
+
+      // 완료된 요청이면 RAG 문서도 갱신
+      if (currentRequest.status === 'completed') {
+        await updateRagDocument(supabase, requestId)
+      }
+    } catch (embeddingError) {
+      console.error('임베딩 갱신 오류:', embeddingError)
+      // 임베딩 갱신 실패해도 수정 처리는 유지
+    }
   }
 
   // 수정 히스토리 기록
