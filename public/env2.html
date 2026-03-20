@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>수업 참고자료 — ENV + MCP</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #111;
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-start;
+    font-family: 'Pretendard', -apple-system, sans-serif;
+  }
+  #slide {
+    position: relative;
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    background: #000;
+    color: #fff;
+    transform-origin: top left;
+    flex-shrink: 0;
+  }
+  .code-block {
+    background: #080808;
+    border: 1px solid #2a2a2a;
+    padding: 20px 24px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 19px;
+    font-weight: 700;
+    line-height: 1.9;
+    color: #5CA5FF;
+    word-break: break-all;
+    white-space: pre-wrap;
+  }
+  .key { color: #888; }
+  .val { color: #5CA5FF; }
+  .placeholder { color: #333; font-style: italic; }
+  .json-key { color: #888; }
+  .json-val { color: #ccc; }
+  .json-str { color: #5CA5FF; }
+  .json-placeholder { color: #333; font-style: italic; }
+  .json-bracket { color: #555; }
+</style>
+</head>
+<body>
+<div id="slide">
+
+  <!-- 헤더 바 -->
+  <div style="position:absolute;top:0;left:0;width:1920px;height:60px;border-bottom:1px solid #2a2a2a;">
+    <span style="position:absolute;left:80px;top:50%;transform:translateY(-50%);
+                 font-size:18px;font-weight:500;color:#555;
+                 letter-spacing:0.14em;text-transform:uppercase;">buildersgate</span>
+    <span style="position:absolute;right:80px;top:50%;transform:translateY(-50%);
+                 font-size:13px;font-weight:700;color:#444;
+                 letter-spacing:0.1em;text-transform:uppercase;">수업 참고자료</span>
+    <span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+                 font-size:15px;font-weight:700;color:#5CA5FF;
+                 letter-spacing:0.04em;font-family:'Courier New',monospace;">https://ktestate-itsm.vercel.app/env2.html</span>
+  </div>
+
+  <!-- 제목 영역 -->
+  <div style="position:absolute;top:60px;left:0;width:1920px;height:140px;
+              border-bottom:3px solid #fff;
+              display:flex;flex-direction:column;justify-content:center;padding:0 80px;gap:12px;">
+    <span style="display:inline-block;width:fit-content;border:2px solid #5CA5FF;padding:4px 14px;
+                 font-size:13px;font-weight:700;color:#5CA5FF;
+                 letter-spacing:0.12em;text-transform:uppercase;">ENV · MCP CONFIG</span>
+    <h1 style="font-size:56px;font-weight:900;color:#fff;line-height:1.0;letter-spacing:-2px;">
+      환경변수 + MCP 설정 — 복사해서 사용하세요
+    </h1>
+  </div>
+
+  <!-- 중앙 수직 구분선 -->
+  <div style="position:absolute;top:200px;left:960px;width:1px;height:824px;background:#222;"></div>
+
+  <!-- 좌측: .env -->
+  <div style="position:absolute;top:210px;left:80px;width:840px;">
+
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;">
+      <div style="border:2px solid #5CA5FF;padding:5px 16px;">
+        <p style="font-size:13px;font-weight:700;color:#5CA5FF;letter-spacing:0.1em;text-transform:uppercase;">.env 파일</p>
+      </div>
+      <p style="font-size:14px;font-weight:400;color:#444;">프로젝트 루트에 생성 후 붙여넣기</p>
+    </div>
+
+    <div class="code-block"><span class="key">NEXT_PUBLIC_SUPABASE_URL</span>=<span class="val">https://</span><span class="placeholder">(프로젝트ID)</span><span class="val">.supabase.co</span>
+
+<span class="key">NEXT_PUBLIC_SUPABASE_ANON_KEY</span>=<span class="val">eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpmcmZ5YW1vaGF0ZGl5eXB5dHJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY2NjkyNjksImV4cCI6MjA4MjI0NTI2OX0.ubatj5oPqfR-0m2IeBkF_TnqdtJ4i9OiwKKKVu04LFs</span>
+
+<span class="key">GEMINI_API_KEY</span>=<span class="val">AIzaSyAOMMFW9Ql58XHJxZr6zl33s0amXWex_uw</span></div>
+
+    <!-- 파일 위치 안내 -->
+    <div style="margin-top:20px;border:2px solid #1e1e1e;padding:14px 20px;display:flex;align-items:center;gap:16px;">
+      <span style="font-size:20px;color:#5CA5FF;font-weight:900;flex-shrink:0;">→</span>
+      <div>
+        <p style="font-size:15px;font-weight:700;color:#888;margin-bottom:4px;">파일 위치</p>
+        <p style="font-size:16px;font-weight:400;color:#555;font-family:monospace;">프로젝트폴더/.env</p>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 우측: MCP JSON -->
+  <div style="position:absolute;top:210px;left:1000px;width:840px;">
+
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;">
+      <div style="border:2px solid #5CA5FF;padding:5px 16px;">
+        <p style="font-size:13px;font-weight:700;color:#5CA5FF;letter-spacing:0.1em;text-transform:uppercase;">.cursor/mcp.json</p>
+      </div>
+      <p style="font-size:14px;font-weight:400;color:#444;">Cursor MCP 설정 파일</p>
+    </div>
+
+    <div class="code-block"><span class="json-bracket">{</span>
+  <span class="json-key">"mcpServers"</span>: <span class="json-bracket">{</span>
+    <span class="json-key">"supabase"</span>: <span class="json-bracket">{</span>
+      <span class="json-key">"type"</span>: <span class="json-str">"http"</span>,
+      <span class="json-key">"url"</span>: <span class="json-str">"https://mcp.supabase.com/mcp?project_ref=</span><span class="json-placeholder">(프로젝트ID)</span><span class="json-str">"</span>,
+      <span class="json-key">"headers"</span>: <span class="json-bracket">{</span>
+        <span class="json-key">"Authorization"</span>: <span class="json-str">"Bearer sbp_be3ec3d51fbe4f05466d9cc6b35f0b88409618cf"</span>
+      <span class="json-bracket">}</span>
+    <span class="json-bracket">}</span>
+  <span class="json-bracket">}</span>
+<span class="json-bracket">}</span></div>
+
+    <!-- 파일 위치 안내 -->
+    <div style="margin-top:20px;border:2px solid #1e1e1e;padding:14px 20px;display:flex;align-items:center;gap:16px;">
+      <span style="font-size:20px;color:#5CA5FF;font-weight:900;flex-shrink:0;">→</span>
+      <div>
+        <p style="font-size:15px;font-weight:700;color:#888;margin-bottom:4px;">파일 위치</p>
+        <p style="font-size:16px;font-weight:400;color:#555;font-family:monospace;">프로젝트폴더/.cursor/mcp.json</p>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 푸터 -->
+  <div style="position:absolute;bottom:0;left:0;width:1920px;height:56px;
+              border-top:1px solid #1e1e1e;
+              display:flex;align-items:center;justify-content:space-between;padding:0 80px;">
+    <span style="font-size:13px;font-weight:400;color:#2a2a2a;letter-spacing:0.04em;">
+      ※ 본 슬라이드는 수업 실습용 자료입니다. 수업 종료 후 키를 재발급하세요.
+    </span>
+    <span style="font-size:13px;font-weight:700;color:#222;letter-spacing:0.1em;">실습 참고자료</span>
+  </div>
+
+</div>
+  <script>
+    function scaleSlide() {
+      var slide = document.getElementById('slide');
+      var scaleX = window.innerWidth / 1920;
+      var scaleY = window.innerHeight / 1080;
+      var scale = Math.min(scaleX, scaleY);
+      slide.style.transform = 'scale(' + scale + ')';
+      slide.style.marginLeft = ((window.innerWidth - 1920 * scale) / 2) + 'px';
+      slide.style.marginTop = ((window.innerHeight - 1080 * scale) / 2) + 'px';
+    }
+    window.addEventListener('resize', scaleSlide);
+    window.addEventListener('DOMContentLoaded', scaleSlide);
+  </script>
+</body>
+</html>
