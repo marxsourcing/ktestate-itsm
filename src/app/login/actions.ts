@@ -43,6 +43,11 @@ export async function signup(formData: FormData) {
   const password = formData.get('password') as string
   const fullName = formData.get('full_name') as string
   const role = formData.get('role') as string
+  const birthday = formData.get('birthday') as string
+
+  if (!birthday) {
+    return { error: '생년월일을 입력해주세요.' }
+  }
 
   // 보안: admin 역할은 회원가입으로 선택 불가
   const validRole = role === 'manager' ? 'manager' : 'requester'
@@ -54,6 +59,7 @@ export async function signup(formData: FormData) {
       data: {
         full_name: fullName,
         role: validRole,
+        birthday,
       },
     },
   })
@@ -66,7 +72,7 @@ export async function signup(formData: FormData) {
   if (data.user) {
     await supabase
       .from('profiles')
-      .update({ role: validRole })
+      .update({ role: validRole, birthday })
       .eq('id', data.user.id)
   }
 

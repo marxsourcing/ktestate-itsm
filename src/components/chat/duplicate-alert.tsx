@@ -86,7 +86,7 @@ export function DuplicateAlert({
           )}>
             {hasDuplicate
               ? '⚠️ 매우 유사한 요청이 있습니다!'
-              : `유사한 요청 ${similarRequests.length}건 발견`
+              : '유사한 요청 발견'
             }
           </span>
           {hasDuplicate && (

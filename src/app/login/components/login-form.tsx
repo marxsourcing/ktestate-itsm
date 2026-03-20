@@ -93,6 +93,18 @@ export function LoginForm() {
             className="h-11 bg-white border-gray-300 text-gray-900 placeholder:text-gray-400 focus:border-rose-500 focus:ring-rose-100"
           />
         </div>
+        {isSignup && (
+          <div className="space-y-2">
+            <Label htmlFor="birthday" className="text-gray-700">생년월일</Label>
+            <Input 
+              id="birthday" 
+              name="birthday" 
+              type="date" 
+              required 
+              className="h-11 bg-white border-gray-300 text-gray-900 placeholder:text-gray-400 focus:border-rose-500 focus:ring-rose-100"
+            />
+          </div>
+        )}
         <div className="space-y-2">
           <Label htmlFor="password" className="text-gray-700">비밀번호</Label>
           <Input 

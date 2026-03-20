@@ -108,9 +108,9 @@ export async function POST(request: NextRequest) {
                 }
               })
 
-              // 유사도 순 정렬
+              // 유사도 순 정렬 후 가장 유사한 1건만 반환
               similarRequests.sort((a, b) => b.similarity - a.similarity)
-              const topSimilar = similarRequests.slice(0, 5)
+              const topSimilar = similarRequests.slice(0, 1)
               const hasDuplicate = topSimilar.some(r => r.similarity >= 80)
 
               return NextResponse.json({
@@ -181,7 +181,7 @@ export async function POST(request: NextRequest) {
     }))
 
     similarRequests.sort((a, b) => b.similarity - a.similarity)
-    const topSimilar = similarRequests.slice(0, 5)
+    const topSimilar = similarRequests.slice(0, 1)
     const hasDuplicate = topSimilar.some(r => r.similarity >= 80)
 
     return NextResponse.json({
@@ -274,9 +274,9 @@ async function fallbackKeywordSearch(
     }
   }
 
-  // 유사도 순으로 정렬하고 상위 5개만 반환
+  // 유사도 순으로 정렬하고 가장 유사한 1건만 반환
   similarRequests.sort((a, b) => b.similarity - a.similarity)
-  const topSimilar = similarRequests.slice(0, 5)
+  const topSimilar = similarRequests.slice(0, 1)
 
   // 80% 이상 유사도 = 중복 가능성 높음
   const hasDuplicate = topSimilar.some(r => r.similarity >= 80)

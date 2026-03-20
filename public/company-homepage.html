@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Company Website Homepage</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #fff;
+      color: #222;
+      overflow-x: hidden;
+    }
+
+    .page-wrapper {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: #fff;
+    }
+
+    /* ===== NAVBAR ===== */
+    .navbar {
+      display: flex;
+      align-items: center;
+      padding: 0 60px;
+      height: 70px;
+      background: #f5f7fb;
+      border-radius: 0 0 8px 8px;
+    }
+
+    .logo {
+      margin-right: auto;
+    }
+
+    .logo svg {
+      width: 48px;
+      height: 48px;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 36px;
+      list-style: none;
+    }
+
+    .nav-links a {
+      text-decoration: none;
+      color: #333;
+      font-size: 14px;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+
+    .nav-links a:hover {
+      color: #0048ff;
+    }
+
+    .btn-signin {
+      margin-left: 36px;
+      border: 1.5px solid #0048ff;
+      border-radius: 50px;
+      padding: 7px 22px;
+      color: #0048ff;
+      font-size: 13px;
+      font-weight: 500;
+      text-decoration: none;
+      transition: all 0.2s;
+      background: transparent;
+    }
+
+    .btn-signin:hover {
+      background: #0048ff;
+      color: #fff;
+    }
+
+    /* ===== HERO ===== */
+    .hero {
+      display: flex;
+      align-items: center;
+      padding: 70px 60px 50px;
+      gap: 40px;
+    }
+
+    .hero-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .hero-content h1 {
+      font-size: 36px;
+      font-weight: 800;
+      color: #0048ff;
+      line-height: 1.25;
+      margin-bottom: 28px;
+      font-style: italic;
+    }
+
+    .hero-content p {
+      font-size: 13px;
+      line-height: 1.9;
+      color: #555;
+      margin-bottom: 30px;
+      max-width: 440px;
+    }
+
+    .btn-action {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: 1.5px solid #0048ff;
+      border-radius: 50px;
+      padding: 9px 22px;
+      color: #0048ff;
+      font-size: 13px;
+      font-weight: 500;
+      text-decoration: none;
+      transition: all 0.2s;
+      background: transparent;
+    }
+
+    .btn-action:hover {
+      background: #0048ff;
+      color: #fff;
+    }
+
+    .btn-action .arrow {
+      transition: transform 0.2s;
+    }
+
+    .btn-action:hover .arrow {
+      transform: translateX(4px);
+    }
+
+    .btn-action.filled {
+      background: #0048ff;
+      color: #fff;
+    }
+
+    .btn-action.filled:hover {
+      background: #003ad6;
+    }
+
+    .hero-illustration {
+      flex: 0 0 400px;
+      position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 340px;
+    }
+
+    .hero-illustration .circle-bg {
+      position: absolute;
+      width: 320px;
+      height: 320px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #dde5ff 0%, #e8eeff 100%);
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+
+    .hero-illustration img {
+      position: relative;
+      z-index: 1;
+      width: 360px;
+      height: auto;
+    }
+
+    /* ===== ABOUT ===== */
+    .about-section {
+      padding: 50px 60px;
+    }
+
+    .about-card {
+      display: flex;
+      align-items: stretch;
+      background: #f0f5ff;
+      border-radius: 14px;
+      overflow: hidden;
+    }
+
+    .about-left {
+      width: 240px;
+      min-width: 240px;
+      background: #fff;
+      border-right: 2px solid #c4d4ff;
+      border-radius: 14px 0 0 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 30px;
+    }
+
+    .about-left h2 {
+      font-size: 26px;
+      font-weight: 700;
+      color: #0048ff;
+      line-height: 1.35;
+    }
+
+    .about-right {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      padding: 36px 44px;
+    }
+
+    .about-right p {
+      font-size: 14px;
+      line-height: 2;
+      color: #333;
+    }
+
+    /* ===== SECTION TITLES ===== */
+    .section-title {
+      text-align: center;
+      font-size: 24px;
+      font-weight: 700;
+      color: #0048ff;
+      padding: 50px 0 36px;
+      font-style: italic;
+    }
+
+    /* ===== SERVICE CARDS ===== */
+    .service-card {
+      display: flex;
+      align-items: center;
+      background: #f7f9ff;
+      border-radius: 14px;
+      margin: 0 60px 20px;
+      padding: 36px 44px;
+      gap: 36px;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .service-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(0, 72, 255, 0.06);
+    }
+
+    .service-card.reversed {
+      flex-direction: row-reverse;
+    }
+
+    .service-card-content {
+      flex: 1;
+    }
+
+    .service-card-content h3 {
+      font-size: 18px;
+      font-weight: 700;
+      color: #002b9a;
+      margin-bottom: 14px;
+    }
+
+    .service-card-content p {
+      font-size: 14px;
+      line-height: 1.7;
+      color: #555;
+      margin-bottom: 20px;
+    }
+
+    .service-card-illustration {
+      flex: 0 0 260px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .service-card-illustration img {
+      max-width: 100%;
+      height: auto;
+      max-height: 200px;
+    }
+
+    /* ===== SERVICE MAP ===== */
+    .service-map-card {
+      display: flex;
+      align-items: center;
+      background: #f7f9ff;
+      border-radius: 14px;
+      margin: 0 60px 20px;
+      padding: 36px 44px;
+      gap: 36px;
+    }
+
+    .service-map-title {
+      flex: 0 0 200px;
+    }
+
+    .service-map-title h3 {
+      font-size: 18px;
+      font-weight: 700;
+      color: #002b9a;
+      line-height: 1.4;
+    }
+
+    .service-map-desc {
+      flex: 1;
+    }
+
+    .service-map-desc p {
+      font-size: 14px;
+      line-height: 1.7;
+      color: #555;
+    }
+
+    /* ===== VIEW ALL ===== */
+    .view-all {
+      text-align: center;
+      padding: 32px 0;
+    }
+
+    .view-all a {
+      color: #0048ff;
+      text-decoration: none;
+      font-size: 15px;
+      font-weight: 600;
+      transition: opacity 0.2s;
+    }
+
+    .view-all a:hover {
+      opacity: 0.7;
+    }
+
+    /* ===== CONTACT ===== */
+    .contact-section {
+      margin: 20px 60px 36px;
+      background: #eff7ff;
+      border-radius: 14px;
+      padding: 44px 50px 50px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .contact-section .section-title {
+      padding: 0 0 32px;
+    }
+
+    .contact-deco {
+      position: absolute;
+      border-radius: 50%;
+      background: #0048ff;
+    }
+
+    .contact-deco.d1 {
+      width: 160px;
+      height: 160px;
+      opacity: 0.08;
+      top: 30px;
+      left: -30px;
+    }
+
+    .contact-deco.d2 {
+      width: 160px;
+      height: 160px;
+      opacity: 0.08;
+      bottom: -30px;
+      right: -30px;
+    }
+
+    .contact-deco.d3 {
+      width: 40px;
+      height: 40px;
+      opacity: 0.15;
+      top: 110px;
+      left: 50px;
+    }
+
+    .contact-deco.d4 {
+      width: 40px;
+      height: 40px;
+      opacity: 0.15;
+      bottom: 70px;
+      right: 50px;
+    }
+
+    .contact-form {
+      max-width: 420px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 1;
+    }
+
+    .contact-form input,
+    .contact-form textarea {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid #e4e4e4;
+      border-radius: 5px;
+      font-size: 13px;
+      font-family: 'Inter', sans-serif;
+      margin-bottom: 10px;
+      background: #fff;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .contact-form input:focus,
+    .contact-form textarea:focus {
+      border-color: #0048ff;
+    }
+
+    .contact-form input::placeholder,
+    .contact-form textarea::placeholder {
+      color: #bbb;
+    }
+
+    .contact-form textarea {
+      height: 120px;
+      resize: vertical;
+    }
+
+    .btn-send {
+      display: block;
+      margin: 12px auto 0;
+      background: #0048ff;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      padding: 10px 48px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      transition: background 0.2s;
+    }
+
+    .btn-send:hover {
+      background: #003ad6;
+    }
+
+    /* ===== FOOTER ===== */
+    .footer {
+      background: #f5f7fb;
+      padding: 20px 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 0 60px 36px;
+      border-radius: 10px;
+    }
+
+    .footer .company-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .footer .copyright {
+      font-size: 12px;
+      color: #888;
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 960px) {
+      .navbar { padding: 0 24px; }
+      .nav-links { gap: 20px; }
+      .hero {
+        flex-direction: column;
+        padding: 40px 24px;
+        text-align: center;
+      }
+      .hero-content h1 { font-size: 28px; }
+      .hero-content p { max-width: 100%; }
+      .hero-illustration { flex: none; min-height: 260px; }
+      .hero-illustration img { width: 280px; }
+      .hero-illustration .circle-bg { width: 240px; height: 240px; right: auto; }
+      .about-section { padding: 40px 24px; }
+      .about-card { flex-direction: column; }
+      .about-left {
+        width: 100%;
+        min-width: unset;
+        border-radius: 14px 14px 0 0;
+        border-right: none;
+        border-bottom: 2px solid #c4d4ff;
+        padding: 28px;
+      }
+      .about-right { padding: 28px; }
+      .service-card,
+      .service-map-card {
+        flex-direction: column !important;
+        margin: 0 24px 20px;
+        padding: 28px;
+      }
+      .service-card-illustration { flex: none; width: 100%; }
+      .contact-section { margin: 20px 24px 36px; padding: 36px 24px; }
+      .footer { margin: 0 24px 36px; flex-direction: column; gap: 6px; text-align: center; }
+    }
+
+    @media (max-width: 600px) {
+      .nav-links { display: none; }
+      .btn-signin { margin-left: auto; }
+      .hero-content h1 { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page-wrapper">
+
+    <!-- NAVBAR -->
+    <nav class="navbar">
+      <div class="logo">
+        <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="16" cy="16" r="9" fill="none" stroke="#333" stroke-width="2"/>
+          <circle cx="32" cy="16" r="9" fill="none" stroke="#333" stroke-width="2"/>
+          <circle cx="16" cy="32" r="9" fill="none" stroke="#333" stroke-width="2"/>
+          <circle cx="32" cy="32" r="9" fill="none" stroke="#333" stroke-width="2"/>
+          <circle cx="24" cy="24" r="3.5" fill="#333"/>
+          <circle cx="36" cy="20" r="5" fill="#0048ff"/>
+          <line x1="7" y1="16" x2="2" y2="16" stroke="#333" stroke-width="2"/>
+          <line x1="24" y1="7" x2="24" y2="2" stroke="#333" stroke-width="2"/>
+        </svg>
+      </div>
+      <ul class="nav-links">
+        <li><a href="#">Home</a></li>
+        <li><a href="#">About</a></li>
+        <li><a href="#">Our Services</a></li>
+        <li><a href="#">Service Map</a></li>
+        <li><a href="#">Contact Us</a></li>
+      </ul>
+      <a href="#" class="btn-signin">Sign in</a>
+    </nav>
+
+    <!-- HERO -->
+    <section class="hero">
+      <div class="hero-content">
+        <h1>Providing Industry Leading<br>Solutions for</h1>
+        <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Habitant cras morbi hendrerit nunc vel sapien. In habitasse at diam suspendisse non vitae fermentum, pharetra arcu. Viverra a morbi ut donec in. Ac diam, at sed cras nisi.</p>
+        <a href="#" class="btn-action filled">Learn More <span class="arrow">&rarr;</span></a>
+      </div>
+      <div class="hero-illustration">
+        <div class="circle-bg"></div>
+        <img src="https://storyset.com/api/illustration/business-plan/bro?color=6C63FF&background=transparent&hide=" alt="Business Analytics" onerror="this.onerror=null;this.style.display='block';this.style.width='360px';this.style.height='300px';this.style.background='linear-gradient(135deg,#e8eeff,#dde5ff)';this.style.borderRadius='16px';">
+      </div>
+    </section>
+
+    <!-- ABOUT -->
+    <section class="about-section">
+      <div class="about-card">
+        <div class="about-left">
+          <h2>About<br>Company</h2>
+        </div>
+        <div class="about-right">
+          <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Eget duis mi nunc bibendum. Tellus elementum nec lorem eget dictumst. Risus in gravida eu, enim lorem. Sed consequat ut suspendisse eros. Nunc nunc accumsan, viverra enim. Mi.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- OUR SERVICES -->
+    <h2 class="section-title">Our Services</h2>
+
+    <div class="service-card">
+      <div class="service-card-content">
+        <h3>Non-IT enterprises</h3>
+        <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Consequat bibendum sit felis, sollicitudin et. Nulla aliquet integer hac ac morbi.</p>
+        <a href="#" class="btn-action">Learn More <span class="arrow">&rarr;</span></a>
+      </div>
+      <div class="service-card-illustration">
+        <svg viewBox="0 0 300 220" xmlns="http://www.w3.org/2000/svg" width="260" height="190">
+          <rect x="80" y="30" width="140" height="120" rx="8" fill="#E879A8" stroke="#333" stroke-width="2"/>
+          <rect x="95" y="50" width="45" height="35" rx="4" fill="#FFD4E5" stroke="#333" stroke-width="1.5"/>
+          <rect x="150" y="50" width="55" height="35" rx="4" fill="#FFD4E5" stroke="#333" stroke-width="1.5"/>
+          <rect x="95" y="95" width="45" height="35" rx="4" fill="#FFD4E5" stroke="#333" stroke-width="1.5"/>
+          <rect x="150" y="95" width="55" height="35" rx="4" fill="#FFD4E5" stroke="#333" stroke-width="1.5"/>
+          <path d="M60 80 Q50 60 70 50 L80 65" stroke="#666" stroke-width="3" fill="none"/>
+          <path d="M220 70 Q240 50 250 70 L240 80" stroke="#666" stroke-width="3" fill="none"/>
+          <path d="M150 30 L150 15 Q150 5 160 5 L180 5" stroke="#666" stroke-width="3" fill="none"/>
+          <path d="M150 150 L150 170" stroke="#666" stroke-width="3" fill="none"/>
+          <g transform="translate(40,170)">
+            <path d="M0 30 Q5 10 15 15 Q20 5 30 15 Q35 8 40 15 Q50 10 50 30 Z" fill="#E879A8" opacity="0.4"/>
+            <line x1="15" y1="30" x2="15" y2="15" stroke="#E879A8" stroke-width="1.5"/>
+            <line x1="35" y1="30" x2="35" y2="18" stroke="#E879A8" stroke-width="1.5"/>
+          </g>
+          <g transform="translate(200,170)">
+            <path d="M0 30 Q5 10 15 15 Q20 5 30 15 Q35 8 40 15 Q50 10 50 30 Z" fill="#E879A8" opacity="0.4"/>
+            <line x1="15" y1="30" x2="15" y2="15" stroke="#E879A8" stroke-width="1.5"/>
+            <line x1="35" y1="30" x2="35" y2="18" stroke="#E879A8" stroke-width="1.5"/>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <div class="service-card reversed">
+      <div class="service-card-content">
+        <h3>Software product companies</h3>
+        <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Blandit viverra porta tortor, elementum ultrices. Blandit quam nec aliquam.</p>
+        <a href="#" class="btn-action">Learn More <span class="arrow">&rarr;</span></a>
+      </div>
+      <div class="service-card-illustration">
+        <svg viewBox="0 0 300 220" xmlns="http://www.w3.org/2000/svg" width="260" height="190">
+          <rect x="60" y="40" width="180" height="110" rx="10" fill="#C4D4FF" stroke="#333" stroke-width="2"/>
+          <rect x="75" y="55" width="150" height="80" rx="6" fill="#E8EEFF"/>
+          <rect x="85" y="65" width="40" height="30" rx="4" fill="#0048FF" opacity="0.2"/>
+          <rect x="135" y="65" width="40" height="30" rx="4" fill="#0048FF" opacity="0.3"/>
+          <rect x="185" y="65" width="30" height="30" rx="4" fill="#0048FF" opacity="0.15"/>
+          <circle cx="105" cy="115" r="8" fill="#0048FF" opacity="0.25"/>
+          <circle cx="155" cy="115" r="8" fill="#0048FF" opacity="0.35"/>
+          <circle cx="200" cy="115" r="8" fill="#0048FF" opacity="0.2"/>
+          <rect x="120" y="155" width="60" height="8" rx="4" fill="#999"/>
+          <g transform="translate(60,170)">
+            <circle cx="30" cy="15" r="12" fill="#6C7BFF" opacity="0.3"/>
+            <rect x="24" y="8" width="12" height="14" rx="3" fill="#6C7BFF" opacity="0.5"/>
+          </g>
+          <g transform="translate(180,170)">
+            <circle cx="30" cy="15" r="12" fill="#6C7BFF" opacity="0.3"/>
+            <rect x="24" y="8" width="12" height="14" rx="3" fill="#6C7BFF" opacity="0.5"/>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <div class="service-card">
+      <div class="service-card-content">
+        <h3>Non-IT enterprises</h3>
+        <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Blandit viverra porta tortor, elementum ultrices. Blandit quam nec aliquam.</p>
+        <a href="#" class="btn-action">Learn More <span class="arrow">&rarr;</span></a>
+      </div>
+      <div class="service-card-illustration">
+        <svg viewBox="0 0 300 220" xmlns="http://www.w3.org/2000/svg" width="260" height="190">
+          <rect x="70" y="30" width="160" height="130" rx="8" fill="#FFB6D5" stroke="#333" stroke-width="2"/>
+          <rect x="85" y="45" width="130" height="100" rx="6" fill="#FFE0ED"/>
+          <rect x="95" y="55" width="50" height="40" rx="4" fill="#E879A8" opacity="0.4"/>
+          <rect x="155" y="55" width="50" height="40" rx="4" fill="#E879A8" opacity="0.3"/>
+          <line x1="95" y1="110" x2="205" y2="110" stroke="#E879A8" stroke-width="1.5"/>
+          <line x1="95" y1="120" x2="175" y2="120" stroke="#E879A8" stroke-width="1.5"/>
+          <line x1="95" y1="130" x2="145" y2="130" stroke="#E879A8" stroke-width="1.5"/>
+          <path d="M50 80 Q40 60 55 45" stroke="#666" stroke-width="3" fill="none"/>
+          <path d="M250 75 Q265 55 255 40" stroke="#666" stroke-width="3" fill="none"/>
+          <g transform="translate(40,170)">
+            <path d="M0 30 Q5 10 15 15 Q20 5 30 15 Q35 8 40 15 Q50 10 50 30 Z" fill="#E879A8" opacity="0.4"/>
+          </g>
+          <g transform="translate(210,170)">
+            <path d="M0 30 Q5 10 15 15 Q20 5 30 15 Q35 8 40 15 Q50 10 50 30 Z" fill="#E879A8" opacity="0.4"/>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <!-- SERVICE MAP -->
+    <h2 class="section-title">Service Map</h2>
+
+    <div class="service-map-card">
+      <div class="service-map-title">
+        <h3>IT consulting</h3>
+      </div>
+      <div class="service-map-desc">
+        <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Blandit viverra porta tortor, elementum ultrices. Blandit quam nec aliquam. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Blandit viverra porta tortor, elementum ultrices. Blandit quam nec aliquam.</p>
+      </div>
+    </div>
+
+    <div class="service-map-card">
+      <div class="service-map-title">
+        <h3>Software<br>Development</h3>
+      </div>
+      <div class="service-map-desc">
+        <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Blandit viverra porta tortor, elementum ultrices. Blandit quam nec aliquam. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Blandit viverra porta tortor, elementum ultrices. Blandit quam nec aliquam.</p>
+      </div>
+    </div>
+
+    <div class="service-map-card">
+      <div class="service-map-title">
+        <h3>Testing and QA</h3>
+      </div>
+      <div class="service-map-desc">
+        <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Blandit viverra porta tortor, elementum ultrices. Blandit quam nec aliquam. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Blandit viverra porta tortor, elementum ultrices. Blandit quam nec aliquam.</p>
+      </div>
+    </div>
+
+    <!-- VIEW ALL -->
+    <div class="view-all">
+      <a href="#">View All Services</a>
+    </div>
+
+    <!-- CONTACT US -->
+    <section class="contact-section">
+      <div class="contact-deco d1"></div>
+      <div class="contact-deco d2"></div>
+      <div class="contact-deco d3"></div>
+      <div class="contact-deco d4"></div>
+
+      <h2 class="section-title">Contact Us</h2>
+
+      <form class="contact-form" onsubmit="return false;">
+        <input type="text" placeholder="Full Name">
+        <input type="email" placeholder="Email Address">
+        <input type="tel" placeholder="Phone Number">
+        <textarea placeholder="Have anything to say?"></textarea>
+        <button type="submit" class="btn-send">Send</button>
+      </form>
+    </section>
+
+    <!-- FOOTER -->
+    <footer class="footer">
+      <span class="company-name">Company Name</span>
+      <span class="copyright">Company, 2022 &copy; All Rights Reserved</span>
+    </footer>
+
+  </div>
+
+  <script>
+    const heroImg = document.querySelector('.hero-illustration img');
+    if (heroImg) {
+      const svgFallback = `
+        <svg viewBox="0 0 400 340" xmlns="http://www.w3.org/2000/svg" style="width:360px;height:300px;">
+          <rect x="80" y="20" width="240" height="160" rx="12" fill="#E8EEFF" stroke="#6C7BFF" stroke-width="2"/>
+          <rect x="100" y="40" width="200" height="120" rx="8" fill="#fff"/>
+          <rect x="115" y="60" width="50" height="40" rx="4" fill="#0048FF" opacity="0.15"/>
+          <rect x="175" y="70" width="8" height="30" rx="2" fill="#6C7BFF"/>
+          <rect x="190" y="55" width="8" height="45" rx="2" fill="#6C7BFF" opacity="0.7"/>
+          <rect x="205" y="65" width="8" height="35" rx="2" fill="#6C7BFF" opacity="0.5"/>
+          <rect x="220" y="50" width="8" height="50" rx="2" fill="#6C7BFF" opacity="0.8"/>
+          <rect x="235" y="60" width="8" height="40" rx="2" fill="#6C7BFF" opacity="0.6"/>
+          <rect x="250" y="45" width="8" height="55" rx="2" fill="#6C7BFF"/>
+          <rect x="265" y="40" width="8" height="60" rx="2" fill="#6C7BFF" opacity="0.9"/>
+          <circle cx="280" cy="55" r="20" fill="none" stroke="#6C7BFF" stroke-width="2"/>
+          <text x="272" y="52" font-size="8" fill="#6C7BFF">45%</text>
+          <text x="272" y="62" font-size="8" fill="#999">55%</text>
+          <path d="M280 35 A20 20 0 0 1 298 50" stroke="#0048FF" stroke-width="3" fill="none"/>
+          <line x1="115" y1="120" x2="285" y2="120" stroke="#ddd" stroke-width="1"/>
+          <line x1="115" y1="130" x2="250" y2="130" stroke="#ddd" stroke-width="1"/>
+          <line x1="115" y1="140" x2="200" y2="140" stroke="#ddd" stroke-width="1"/>
+          <ellipse cx="200" cy="260" rx="120" ry="30" fill="#6C7BFF" opacity="0.15"/>
+          <g transform="translate(120,180)">
+            <circle cx="30" cy="15" r="14" fill="#FFD4E5"/>
+            <rect x="15" y="30" width="30" height="50" rx="8" fill="#6C7BFF"/>
+            <rect x="10" y="35" width="15" height="35" rx="5" fill="#6C7BFF" opacity="0.7"/>
+            <rect x="35" y="40" width="20" height="25" rx="5" fill="#6C7BFF" opacity="0.7"/>
+          </g>
+          <g transform="translate(230,200)">
+            <circle cx="20" cy="10" r="12" fill="#FFD4E5"/>
+            <rect x="8" y="22" width="24" height="40" rx="6" fill="#333"/>
+            <rect x="0" y="28" width="14" height="28" rx="5" fill="#333" opacity="0.7"/>
+          </g>
+        </svg>
+      `;
+      heroImg.onerror = function() {
+        const div = document.createElement('div');
+        div.innerHTML = svgFallback;
+        div.style.position = 'relative';
+        div.style.zIndex = '1';
+        this.replaceWith(div);
+      };
+    }
+  </script>
+</body>
+</html>

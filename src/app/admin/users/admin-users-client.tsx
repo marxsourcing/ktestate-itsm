@@ -171,7 +171,7 @@ export function AdminUsersClient({ users, currentUserId }: Props) {
               <TableHead className="w-[120px]">이름</TableHead>
               <TableHead className="w-[120px]">부서</TableHead>
               <TableHead className="w-[100px]">역할</TableHead>
-              <TableHead className="w-[120px]">가입일</TableHead>
+              <TableHead className="w-[160px]">가입일</TableHead>
               <TableHead className="w-[120px] text-right">관리</TableHead>
             </TableRow>
           </TableHeader>
@@ -203,7 +203,15 @@ export function AdminUsersClient({ users, currentUserId }: Props) {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-gray-500 text-sm">
-                    {new Date(user.created_at).toLocaleDateString()}
+                    {new Date(user.created_at).toLocaleString('ko-KR', {
+                      timeZone: 'Asia/Seoul',
+                      year: 'numeric',
+                      month: '2-digit',
+                      day: '2-digit',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      hour12: false,
+                    })}
                   </TableCell>
                   <TableCell className="text-right">
                     <Button
