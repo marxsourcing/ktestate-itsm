@@ -51,3 +51,14 @@ CLAUDE.md
 
 #cursor
 /.cursor
+
+# sensitive keys
+/pem
+/aws-pem
+*.pem
+
+# database dumps
+/dump
+
+# docs (local only)
+/.docs

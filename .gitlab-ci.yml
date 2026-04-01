@@ -1,0 +1,51 @@
+# GitLab: Settings → CI/CD → Variables 에 다음 추가 (Protected + Masked 권장)
+#   SSH_PRIVATE_KEY  — 배포용 SSH 개인키 전체 (ed25519 권장)
+#   DEPLOY_HOST      — KT Cloud 서버 호스트명 또는 공인 IP
+#   DEPLOY_USER      — SSH 로그인 사용자 (예: ubuntu, deploy)
+#   DEPLOY_PATH      — 서버에서 이 저장소가 클론된 절대경로 (예: /var/www/ktestate)
+stages:
+  - verify
+  - deploy
+
+variables:
+  GIT_STRATEGY: fetch
+
+.cache_node: &cache_node
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - node_modules/
+
+lint_and_build:
+  stage: verify
+  image: node:20-bookworm
+  cache:
+    <<: *cache_node
+  script:
+    - npm ci
+    - npm run lint
+    - npm run build
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+deploy_production:
+  stage: deploy
+  image: alpine:3.20
+  needs:
+    - job: lint_and_build
+      artifacts: false
+  before_script:
+    - apk add --no-cache openssh-client bash
+    - eval "$(ssh-agent -s)"
+    - echo "$SSH_PRIVATE_KEY" | tr -d "\r" | ssh-add -
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+  script:
+    - |
+      ssh -o BatchMode=yes "$DEPLOY_USER@$DEPLOY_HOST" \
+        "set -euo pipefail; cd \"$DEPLOY_PATH\" && git fetch origin && git checkout main && git reset --hard origin/main && bash scripts/deploy-on-server.sh"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  environment:
+    name: production
