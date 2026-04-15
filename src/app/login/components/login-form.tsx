@@ -26,8 +26,8 @@ export function LoginForm() {
       if (result?.error) {
         toast.error(result.error)
       } else if (result?.success) {
-        toast.success(result.success)
-        setIsSignup(false)
+        toast.success('가입이 완료되었습니다.')
+        router.push('/')
       }
     } else {
       const result = await login(formData)

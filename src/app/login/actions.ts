@@ -8,7 +8,7 @@ import { revalidatePath } from 'next/cache'
 function translateAuthError(message: string): string {
   const errorMap: Record<string, string> = {
     'Invalid login credentials': '이메일 또는 비밀번호가 올바르지 않습니다.',
-    'Email not confirmed': '이메일 인증이 필요합니다. 이메일을 확인해주세요.',
+    'Email not confirmed': '이메일 인증에 문제가 발생했습니다. 관리자에게 문의해주세요.',
     'User already registered': '이미 가입된 이메일입니다.',
     'Password should be at least 6 characters': '비밀번호는 최소 6자 이상이어야 합니다.',
     'Unable to validate email address: invalid format': '올바른 이메일 형식이 아닙니다.',
@@ -76,8 +76,9 @@ export async function signup(formData: FormData) {
       .eq('id', data.user.id)
   }
 
-  // 이메일 인증이 꺼져 있는 경우 바로 로그인을 시도하거나, 가입 완료 메시지를 띄웁니다.
-  return { success: '가입이 완료되었습니다. 이제 로그인할 수 있습니다.' }
+  // autoconfirm 활성화 상태: 가입 즉시 세션이 생성되므로 바로 로그인 처리
+  revalidatePath('/', 'layout')
+  return { success: true }
 }
 
 export async function logout() {
